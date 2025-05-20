@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2020", // Or a newer ES version supported by your target Electron Chromium version
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler", // Recommended for Vite
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true, // Vite handles the emitting of JS files for the renderer
+    "jsx": "react-jsx", // For React 17+ JSX transform
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Aliases and Types */
+    "paths": {
+      "@/*": ["./src/*"] // Example path alias
+    },
+    "types": ["vite/client"] // Includes Vite client types for env variables, HMR etc.
+  },
+  "include": ["src", "vite.config.ts"], // Include your renderer source code and Vite config
+  "references": [{ "path": "./electron/tsconfig.json" }] // Reference the tsconfig for main/preload
+}

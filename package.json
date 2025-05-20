@@ -1,0 +1,113 @@
+{
+  "name": "anchor-ide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An AI-first Integrated Development Environment",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build:vite": "tsc && vite build",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build": "npm run build:vite && npm run build:electron",
+    "start:dev": "npm run build && electron-forge start",
+    "start": "electron-forge start --skip-packager",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "lint": "eslint --ext .ts,.tsx ."
+  },
+  "dependencies": {
+    "@lydell/node-pty": "latest", 
+    "@monaco-editor/react": "^4.6.0",
+    "@vitejs/plugin-react": "^4.4.1", 
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.11.3",
+    "electron-squirrel-startup": "^1.0.1",
+    "monaco-editor": "^0.49.0", 
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-resizable-panels": "^2.0.19",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.4.0",
+    "@electron-forge/maker-deb": "^7.4.0",
+    "@electron-forge/maker-rpm": "^7.4.0",
+    "@electron-forge/maker-squirrel": "^7.4.0",
+    "@electron-forge/maker-zip": "^7.4.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.4.0",
+    "@electron-forge/plugin-fuses": "^7.4.0",
+    "@electron-forge/plugin-vite": "^7.4.0",
+    "@types/bootstrap": "^5.2.10",
+    "@types/node": "^20.12.12", 
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/sqlite3": "^3.1.11",
+    "@typescript-eslint/eslint-plugin": "^7.10.0",
+    "@typescript-eslint/parser": "^7.10.0",
+    "electron": "28.3.3", 
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.7",
+    "typescript": "~5.4.5", 
+    "vite": "^5.2.11" 
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "asar": true,
+        "icon": "src/assets/anchor_icon" 
+      },
+      "rebuildConfig": {},
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ],
+      "plugins": [
+        {
+          "name": "@electron-forge/plugin-vite",
+          "config": {
+            "build": [
+              {
+                "entry": "electron/main.ts",
+                "config": "vite.main.config.ts"
+              },
+              {
+                "entry": "electron/preload.ts",
+                "config": "vite.preload.config.ts"
+              }
+            ],
+            "renderer": [
+              {
+                "name": "main_window",
+                "config": "vite.renderer.config.ts" 
+              }
+            ]
+          }
+        },
+        {
+          "name": "@electron-forge/plugin-auto-unpack-natives",
+          "config": {}
+        }
+      ],
+      "publishers": []
+    }
+  }
+}

@@ -1,0 +1,87 @@
+/* Global styles and palette integration */
+      :root {
+        /* Default Light Theme Colors from palette.txt (example mapping) */
+        --anchor-primary: #38397F; /* Primary Purple */
+        --anchor-secondary: #272727; /* Dark Grey/Black */
+        --anchor-accent: #32BDBD; /* Teal Accent */
+        --anchor-text-primary: #212529; /* Default Bootstrap dark text */
+        --anchor-text-secondary: #6c757d; /* Default Bootstrap muted text */
+        --anchor-background: #ffffff; /* White background */
+        --anchor-panel-background: #f8f9fa; /* Light grey for panels */
+        --anchor-border-color: #dee2e6; /* Standard border */
+        --anchor-error: #BD1A1A; /* Red for errors */
+        --anchor-info: #75abbc; /* Bluish for info */
+        --anchor-success: #23b5d3; /* Another Teal for success */
+        --anchor-muted-bg: #dfe0e2; /* Light muted background */
+
+        /* Ensure high contrast for accessibility */
+        --anchor-text-on-primary: #ffffff;
+        --anchor-text-on-secondary: #ffffff;
+      }
+
+      /* Example Dark Theme (can be toggled with JS and data-theme attribute) */
+      [data-theme="dark"] {
+        --anchor-primary: #4a4fa0; /* Darker Purple */
+        --anchor-secondary: #1e1e1e; /* Very Dark Grey/Editor Black */
+        --anchor-accent: #23b5d3; /* Teal Accent */
+        --anchor-text-primary: #f8f9fa; /* Light text */
+        --anchor-text-secondary: #adb5bd; /* Lighter muted text */
+        --anchor-background: #2b2b2b; /* Dark background */
+        --anchor-panel-background: #252526; /* Darker panel background */
+        --anchor-border-color: #44475a; /* Darker border */
+        --anchor-error: #ff5555; /* Brighter Red for dark theme */
+        --anchor-info: #8be9fd;
+        --anchor-success: #50fa7b;
+        --anchor-muted-bg: #38397F;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        color: var(--anchor-text-primary);
+        background-color: var(--anchor-background);
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden; /* Prevent body scroll, panels will handle their own scroll */
+      }
+
+      /* Custom scrollbar for webkit browsers */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--anchor-panel-background);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+
+      /* Ensure root div takes full height */
+      #root, .app-container {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .main-content-area {
+        flex-grow: 1; /* Allows this area to fill available space */
+        display: flex;
+        overflow: hidden; /* Prevent this area from causing body scroll */
+      }
+      .editor-and-terminal-stack {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .panel-resize-handle { /* Style for react-resizable-panels handles */
+        background-color: var(--anchor-border-color);
+        /* Adjust z-index if needed to ensure they are clickable */
+      }
+      .panel-resize-handle[data-resize-handle-active] {
+         background-color: var(--anchor-accent);
+      }
