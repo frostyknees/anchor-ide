@@ -13,6 +13,17 @@ const electronAPI = {
   openFolderDialog: () => electron.ipcRenderer.invoke("dialog:openFolder"),
   readDir: (dirPath) => electron.ipcRenderer.invoke("fs:readDir", dirPath),
   readFile: (filePath) => electron.ipcRenderer.invoke("fs:readFile", filePath),
+  createFile: (filePath) => electron.ipcRenderer.invoke("fs:createFile", filePath),
+  createFolder: (folderPath) => electron.ipcRenderer.invoke("fs:createFolder", folderPath),
+  renameItem: (oldPath, newName) => electron.ipcRenderer.invoke("fs:renameItem", oldPath, newName),
+  deleteItem: (itemPath, isDirectory) => electron.ipcRenderer.invoke("fs:deleteItem", itemPath, isDirectory),
+  showFileExplorerContextMenu: (itemPath, isDirectory) => electron.ipcRenderer.send("show-file-explorer-context-menu", itemPath, isDirectory),
+  onContextMenuCommand: (callback) => {
+    const handler = (_event, args) => callback(args);
+    electron.ipcRenderer.on("context-menu-command", handler);
+    return () => electron.ipcRenderer.removeListener("context-menu-command", handler);
+  },
+  openPathInTerminal: (path) => electron.ipcRenderer.send("terminal:openAt", path),
   ptyHostWrite: (data) => electron.ipcRenderer.send("pty-host:write", data),
   ptyHostResize: (cols, rows) => electron.ipcRenderer.send("pty-host:resize", { cols, rows }),
   onPtyHostData: (callback) => {
@@ -22,7 +33,7 @@ const electronAPI = {
   },
   ptyHostInit: () => electron.ipcRenderer.send("pty-host:init"),
   send: (channel, data) => {
-    const validChannels = ["toMain", "trigger-save", "trigger-save-as", "trigger-close-tab", "open-settings"];
+    const validChannels = ["toMain", "trigger-save", "trigger-save-as", "trigger-close-tab", "open-settings", "show-file-explorer-context-menu", "terminal:openAt"];
     if (validChannels.includes(channel)) {
       electron.ipcRenderer.send(channel, data);
     } else {
@@ -36,8 +47,11 @@ const electronAPI = {
       "dark-mode:system",
       "dark-mode:get-initial",
       "fs:readDir",
-      // Added
-      "fs:readFile"
+      "fs:readFile",
+      "fs:createFile",
+      "fs:createFolder",
+      "fs:renameItem",
+      "fs:deleteItem"
       // Added
     ];
     if (validInvokeChannels.includes(channel)) {
@@ -47,7 +61,7 @@ const electronAPI = {
     return Promise.reject(new Error(`Invalid invoke channel: ${channel}`));
   },
   on: (channel, func) => {
-    const validChannels = ["fromMain", "file-opened", "settings-changed", "update-theme", "pty-host:data", "pty-host:exit", "trigger-open-folder", "trigger-save", "trigger-save-as", "trigger-close-tab", "open-settings"];
+    const validChannels = ["fromMain", "file-opened", "settings-changed", "update-theme", "pty-host:data", "pty-host:exit", "trigger-open-folder", "trigger-save", "trigger-save-as", "trigger-close-tab", "open-settings", "context-menu-command", "display-terminal-path"];
     if (validChannels.includes(channel)) {
       const listener = (_event, ...args) => func(...args);
       electron.ipcRenderer.on(channel, listener);

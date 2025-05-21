@@ -1,7 +1,20 @@
 // electron/preload.ts
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-// It's good practice to type the API exposed to the renderer
+export interface DirectoryItem {
+  name: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  path: string;
+}
+
+export interface FileSystemResult {
+    success: boolean;
+    path?: string;
+    error?: string;
+    message?: string; 
+}
+
 export interface ElectronAPI {
   onUpdateTheme: (callback: (isDarkMode: boolean) => void) => () => void;
   getInitialTheme: () => Promise<boolean>;
@@ -9,8 +22,15 @@ export interface ElectronAPI {
   setSystemTheme: () => Promise<void>;
   showAppMenu: (position?: { x: number; y: number }) => void;
   openFolderDialog: () => Promise<string | undefined>; 
-  readDir: (dirPath: string) => Promise<DirectoryItem[] | { error: string }>; // For File Explorer
-  readFile: (filePath: string) => Promise<{ content: string } | { error: string }>; // For opening files
+  readDir: (dirPath: string) => Promise<DirectoryItem[] | { error: string }>;
+  readFile: (filePath: string) => Promise<{ content: string } | { error: string }>;
+  createFile: (filePath: string) => Promise<FileSystemResult>; 
+  createFolder: (folderPath: string) => Promise<FileSystemResult>; 
+  renameItem: (oldPath: string, newName: string) => Promise<FileSystemResult>; 
+  deleteItem: (itemPath: string, isDirectory: boolean) => Promise<FileSystemResult>; // New
+  showFileExplorerContextMenu: (itemPath: string, isDirectory: boolean) => void; 
+  onContextMenuCommand: (callback: (args: {command: string, path: string, isDirectory: boolean}) => void) => () => void; 
+  openPathInTerminal: (path: string) => void; // New
   ptyHostWrite: (data: string) => void;
   ptyHostResize: (cols: number, rows: number) => void;
   onPtyHostData: (callback: (data: string | Uint8Array) => void) => () => void;
@@ -18,13 +38,6 @@ export interface ElectronAPI {
   send: (channel: string, data?: any) => void;
   invoke: (channel: string, ...args: any[]) => Promise<any>;
   on: (channel: string, func: (...args: any[]) => void) => () => void;
-}
-
-export interface DirectoryItem {
-  name: string;
-  isDirectory: boolean;
-  isFile: boolean;
-  path: string;
 }
 
 
@@ -42,6 +55,19 @@ const electronAPI: ElectronAPI = {
   
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+  createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
+  createFolder: (folderPath: string) => ipcRenderer.invoke('fs:createFolder', folderPath),
+  renameItem: (oldPath: string, newName: string) => ipcRenderer.invoke('fs:renameItem', oldPath, newName),
+  deleteItem: (itemPath: string, isDirectory: boolean) => ipcRenderer.invoke('fs:deleteItem', itemPath, isDirectory),
+
+  showFileExplorerContextMenu: (itemPath: string, isDirectory: boolean) => ipcRenderer.send('show-file-explorer-context-menu', itemPath, isDirectory),
+  onContextMenuCommand: (callback) => {
+    const handler = (_event: IpcRendererEvent, args: {command: string, path: string, isDirectory: boolean}) => callback(args);
+    ipcRenderer.on('context-menu-command', handler);
+    return () => ipcRenderer.removeListener('context-menu-command', handler);
+  },
+  openPathInTerminal: (path: string) => ipcRenderer.send('terminal:openAt', path),
+
 
   ptyHostWrite: (data: string) => ipcRenderer.send('pty-host:write', data),
   ptyHostResize: (cols: number, rows: number) => ipcRenderer.send('pty-host:resize', { cols, rows }),
@@ -53,7 +79,7 @@ const electronAPI: ElectronAPI = {
   ptyHostInit: () => ipcRenderer.send('pty-host:init'),
 
   send: (channel: string, data?: any) => {
-    const validChannels = ['toMain', 'trigger-save', 'trigger-save-as', 'trigger-close-tab', 'open-settings']; 
+    const validChannels = ['toMain', 'trigger-save', 'trigger-save-as', 'trigger-close-tab', 'open-settings', 'show-file-explorer-context-menu', 'terminal:openAt']; 
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     } else {
@@ -66,8 +92,12 @@ const electronAPI: ElectronAPI = {
         'dark-mode:toggle', 
         'dark-mode:system', 
         'dark-mode:get-initial',
-        'fs:readDir', // Added
-        'fs:readFile'  // Added
+        'fs:readDir', 
+        'fs:readFile',
+        'fs:createFile',
+        'fs:createFolder',
+        'fs:renameItem',
+        'fs:deleteItem' // Added
      ]; 
      if (validInvokeChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -76,7 +106,7 @@ const electronAPI: ElectronAPI = {
      return Promise.reject(new Error(`Invalid invoke channel: ${channel}`));
   },
   on: (channel: string, func: (...args: any[]) => void) => {
-    const validChannels = ['fromMain', 'file-opened', 'settings-changed', 'update-theme', 'pty-host:data', 'pty-host:exit', 'trigger-open-folder', 'trigger-save', 'trigger-save-as', 'trigger-close-tab', 'open-settings']; 
+    const validChannels = ['fromMain', 'file-opened', 'settings-changed', 'update-theme', 'pty-host:data', 'pty-host:exit', 'trigger-open-folder', 'trigger-save', 'trigger-save-as', 'trigger-close-tab', 'open-settings', 'context-menu-command', 'display-terminal-path']; 
     if (validChannels.includes(channel)) {
       const listener = (_event: IpcRendererEvent, ...args: any[]) => func(...args);
       ipcRenderer.on(channel, listener);
