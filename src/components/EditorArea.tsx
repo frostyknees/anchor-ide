@@ -37,7 +37,16 @@ const EditorArea: React.FC<EditorAreaProps> = ({
 
   // Effect to load initial open files and set active tab from persisted state
   useEffect(() => {
-    const loadInitialFiles = async () => {
+    const initializeEditorStateForSession = async () => {
+      if (!isFolderCurrentlyOpen) {
+        setOpenFiles([]);
+        setActiveFileId(null);
+        return;
+      }
+
+      // Folder is open, use current initial props to set state.
+      // This assumes initialOpenFiles & initialActiveFileId are the correct persisted state
+      // for the *newly opened* folder session.
       if (initialOpenFiles && initialOpenFiles.length > 0) {
         const loadedFiles: EditorFile[] = [];
         for (const filePath of initialOpenFiles) {
@@ -45,7 +54,7 @@ const EditorArea: React.FC<EditorAreaProps> = ({
           if (result && 'content' in result) {
             loadedFiles.push({
               id: filePath,
-              name: getBasename(filePath), // Assuming getBasename is available
+              name: getBasename(filePath),
               content: result.content,
               isDirty: false,
             });
@@ -58,16 +67,22 @@ const EditorArea: React.FC<EditorAreaProps> = ({
           setActiveFileId(initialActiveFileId);
         } else if (loadedFiles.length > 0) {
           setActiveFileId(loadedFiles[0].id);
+        } else {
+          setActiveFileId(null); // No active file if loadedFiles is empty
         }
-      } else if (isFolderCurrentlyOpen) { // If a folder is open but no persisted files, clear tabs
+      } else { // Folder is open, but no initial files to load
         setOpenFiles([]);
         setActiveFileId(null);
       }
     };
-    loadInitialFiles();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialOpenFiles, initialActiveFileId, isFolderCurrentlyOpen]); // Run once on mount with initial props
 
+    initializeEditorStateForSession();
+    // This effect now primarily depends on whether a folder session is active.
+    // It reads initialOpenFiles/initialActiveFileId but doesn't list them as dependencies
+    // to avoid re-triggering when they change due to this component's own updates.
+    // This is a common pattern for props that are for initial setup of a session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFolderCurrentlyOpen]);
 
   // Propagate open files and active file changes upwards for persistence
   useEffect(() => {

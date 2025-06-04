@@ -23,30 +23,20 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onOpenFile, rootPathToLoad,
       return;
     }
     setIsLoading(true);
-    setCurrentRootPath(dirPath);
-    try {
-      const items = await window.electronAPI?.readDir(dirPath);
-      if (items && !('error' in items)) {
-        // Sort items: folders first, then files, then alphabetically
-        const sortedItems = items.sort((a, b) => {
-          if (a.isDirectory !== b.isDirectory) {
-            return a.isDirectory ? -1 : 1;
-          }
-          return a.name.localeCompare(b.name);
-        });
-        setRootItems(sortedItems);
-      } else {
-        setRootItems([]);
-        console.error('Error reading directory:', items?.error);
-        // Optionally, display an error to the user
-      }
-    } catch (error) {
-      setRootItems([]);
-      console.error('Exception reading directory:', error);
-      // Optionally, display an error to the user
-    }
+    setCurrentRootPath(dirPath); 
+    // Create a single root item representing the selected folder
+    const rootFolderItem: DirectoryItem = {
+      name: getBasename(dirPath), 
+      isDirectory: true,
+      isFile: false,
+      path: dirPath,
+      // children will be fetched by FileExplorerItem when expanded
+    };
+    setRootItems([rootFolderItem]); 
     setIsLoading(false);
-    // refreshNonce might not be needed here anymore if FileExplorerItem handles its own state
+    // The refreshNonce in FileExplorer is primarily for context menu actions (new file/folder, delete)
+    // to signal to FileExplorerItem instances that they might need to refresh their children.
+    // If the root path itself changes (via rootPathToLoad prop), this loadRootFolder runs.
   };
   
   useEffect(() => {

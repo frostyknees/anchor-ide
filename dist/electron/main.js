@@ -27,7 +27,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 // electron/main.ts
-console.log('--- EXECUTING LATEST VERSION OF electron/main.ts ---');
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const pty = __importStar(require("@lydell/node-pty"));
@@ -39,6 +38,8 @@ const electron_store_1 = __importDefault(require("electron-store"));
 if (require('electron-squirrel-startup')) {
     electron_1.app.quit();
 }
+let ptyProcess = null;
+const shell = os_1.default.platform() === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash');
 // Define a more complete default state for AppSettings
 const defaultAppSettings = {
     windowBounds: { width: 1600, height: 900, x: undefined, y: undefined },
@@ -62,8 +63,7 @@ const store = new electron_store_1.default({
     defaults: defaultAppSettings
 });
 let mainWindow = null;
-let ptyProcess = null;
-const shell = os_1.default.platform() === 'win32' ? 'powershell.exe' : 'bash';
+// ptyProcess and shell are declared near the top (lines 17-18)
 // Create the application menu
 const createApplicationMenu = () => {
     const template = [
@@ -125,8 +125,6 @@ const createApplicationMenu = () => {
     electron_1.Menu.setApplicationMenu(menu);
 };
 const createWindow = async () => {
-    console.log(`[ENV_DEBUG] NODE_ENV: ${process.env.NODE_ENV}`);
-    console.log(`[ENV_DEBUG] __dirname: ${__dirname}`);
     // Load the last window state or use defaults
     const ultimateDefaultWindowBounds = { width: 1280, height: 720, x: undefined, y: undefined }; // Final fallback, ensuring x and y are present
     const storedWindowBounds = store.get('windowBounds');
@@ -135,7 +133,7 @@ const createWindow = async () => {
     const storedIsMaximized = store.get('isMaximized');
     const isMaximizedToUse = storedIsMaximized ?? defaultAppSettings.isMaximized ?? ultimateDefaultIsMaximized;
     // Create the browser window.
-    const iconPath = path.join(__dirname, process.env.NODE_ENV === 'development' ? '../../src/assets/anchor_icon.png' : '../assets/anchor_icon.png');
+    const iconPath = process.env.NODE_ENV === 'development' ? path.join(__dirname, '../../src/assets/anchor_icon.png') : path.join(process.resourcesPath, 'assets', 'anchor_icon.png');
     mainWindow = new electron_1.BrowserWindow({
         icon: iconPath,
         width: windowBoundsToUse.width,
@@ -155,26 +153,22 @@ const createWindow = async () => {
         if (process.env.NODE_ENV === 'development') {
             // In development, load from Vite dev server
             const devServerUrl = 'http://localhost:5173';
-            console.log(`[DEBUG] Loading from Vite dev server: ${devServerUrl}`);
             // First try to load the dev server
             await mainWindow.loadURL(devServerUrl);
             // Set up auto-refresh when the dev server is ready
             mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-                console.log(`[DEBUG] Failed to load dev server (${errorCode}): ${errorDescription}`);
                 if (errorCode === -3) { // -3 is ERR_ABORTED, happens during dev server restart
-                    console.log('[DEBUG] Dev server restarting, waiting before reload...');
                     setTimeout(() => {
                         mainWindow?.loadURL(devServerUrl);
                     }, 1000);
                 }
                 else if (errorCode === -105) { // -105 is ERR_NAME_NOT_RESOLVED
-                    console.log('[DEBUG] Dev server not ready yet, retrying...');
                     setTimeout(() => {
                         mainWindow?.loadURL(devServerUrl);
                     }, 1000);
                 }
                 else {
-                    console.error(`[ERROR] Failed to load dev server: ${errorCode} ${errorDescription}`);
+                    console.error(`Failed to load dev server: ${errorCode} ${errorDescription}`);
                 }
             });
         }
@@ -182,14 +176,13 @@ const createWindow = async () => {
             // In production, load the built files
             // Assuming main.js is in 'dist/electron' and renderer output is in 'dist/renderer'
             const indexPath = path.join(__dirname, '../renderer/index.html');
-            console.log(`[DEBUG] Loading file from: ${indexPath}`);
             await mainWindow.loadFile(indexPath);
         }
         // Set up IPC handlers
         setupIPCHandlers();
     }
     catch (error) {
-        console.error(`[ERROR] Failed to load:`, error);
+        console.error(`Failed to load:`, error);
         throw error;
     }
     // Open the DevTools in development mode.
@@ -249,9 +242,20 @@ const createWindow = async () => {
                     break;
             }
         });
-        // Get initial theme
+        // App settings handlers theme
         electron_1.ipcMain.handle('dark-mode:get-initial', async () => {
             return store.get('theme', defaultAppSettings.theme);
+        });
+        // Handler for reading file content
+        electron_1.ipcMain.handle('fs:readFile', async (_event, filePath) => {
+            try {
+                const content = await fs.promises.readFile(filePath, 'utf-8');
+                return { content };
+            }
+            catch (err) {
+                console.error(`Error reading file ${filePath}:`, err);
+                return { error: err.message || 'Failed to read file' };
+            }
         });
         // Handler for reading directory contents
         electron_1.ipcMain.handle('fs:readDir', async (event, dirPath) => {
@@ -336,12 +340,27 @@ const createWindow = async () => {
                 mainWindow.webContents.send('terminal-data', data);
             }
         });
-        ptyProcess.onExit(({ exitCode }) => {
-            console.log(`Terminal process exited with code ${exitCode}`);
+        ptyProcess.onExit(({ exitCode, signal }) => {
+            console.log(`Terminal process exited with code ${exitCode}, signal ${signal}`);
+            mainWindow?.webContents.send('terminal:exit', { exitCode, signal });
             ptyProcess = null;
         });
     };
     // Handle terminal data from renderer
+    electron_1.ipcMain.on('terminal:init', (_event) => {
+        initPty(); // Call your existing initPty function
+    });
+    electron_1.ipcMain.on('terminal:resize', (_event, { cols, rows }) => {
+        if (ptyProcess) {
+            try {
+                ptyProcess.resize(cols, rows);
+            }
+            catch (e) {
+                // This can happen if the pty is in the process of exiting
+                console.warn('Error resizing PTY, likely already exited:', e);
+            }
+        }
+    });
     electron_1.ipcMain.on('terminal-command', (event, command) => {
         if (ptyProcess) {
             ptyProcess.write(command);

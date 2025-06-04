@@ -1,5 +1,4 @@
 // electron/main.ts
-console.log('--- EXECUTING LATEST VERSION OF electron/main.ts ---');
 import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron';
 import * as path from 'path';
 import * as pty from '@lydell/node-pty'; 
@@ -15,6 +14,9 @@ import type { AppSettings, PanelLayout, DirectoryItem } from '@src/types';
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+let ptyProcess: pty.IPty | null = null;
+const shell = os.platform() === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash');
 
 // Define a more complete default state for AppSettings
 const defaultAppSettings: AppSettings = {
@@ -41,8 +43,7 @@ const store = new Store<AppSettings>({
 });
 
 let mainWindow: BrowserWindow | null = null;
-let ptyProcess: pty.IPty | null = null;
-const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+// ptyProcess and shell are declared near the top (lines 17-18)
 
 // Create the application menu
 const createApplicationMenu = () => {
@@ -107,8 +108,6 @@ const createApplicationMenu = () => {
 };
 
 const createWindow = async () => {
-  console.log(`[ENV_DEBUG] NODE_ENV: ${process.env.NODE_ENV}`);
-  console.log(`[ENV_DEBUG] __dirname: ${__dirname}`);
   // Load the last window state or use defaults
   const ultimateDefaultWindowBounds = { width: 1280, height: 720, x: undefined, y: undefined }; // Final fallback, ensuring x and y are present
   const storedWindowBounds = store.get('windowBounds');
@@ -119,7 +118,7 @@ const createWindow = async () => {
   const isMaximizedToUse = storedIsMaximized ?? defaultAppSettings.isMaximized ?? ultimateDefaultIsMaximized;
 
   // Create the browser window.
-  const iconPath = process.env.NODE_ENV === 'development' ? path.join(__dirname, '../src/assets/anchor_icon.png') : path.join(process.resourcesPath, 'assets', 'anchor_icon.png');
+  const iconPath = process.env.NODE_ENV === 'development' ? path.join(__dirname, '../../src/assets/anchor_icon.png') : path.join(process.resourcesPath, 'assets', 'anchor_icon.png');
   mainWindow = new BrowserWindow({
     icon: iconPath,
     width: windowBoundsToUse.width,
@@ -140,40 +139,35 @@ const createWindow = async () => {
     if (process.env.NODE_ENV === 'development') {
       // In development, load from Vite dev server
       const devServerUrl = 'http://localhost:5173';
-      console.log(`[DEBUG] Loading from Vite dev server: ${devServerUrl}`);
       
       // First try to load the dev server
       await mainWindow.loadURL(devServerUrl);
       
       // Set up auto-refresh when the dev server is ready
       mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        console.log(`[DEBUG] Failed to load dev server (${errorCode}): ${errorDescription}`);
         if (errorCode === -3) {  // -3 is ERR_ABORTED, happens during dev server restart
-          console.log('[DEBUG] Dev server restarting, waiting before reload...');
           setTimeout(() => {
             mainWindow?.loadURL(devServerUrl);
           }, 1000);
         } else if (errorCode === -105) {  // -105 is ERR_NAME_NOT_RESOLVED
-          console.log('[DEBUG] Dev server not ready yet, retrying...');
           setTimeout(() => {
             mainWindow?.loadURL(devServerUrl);
           }, 1000);
         } else {
-          console.error(`[ERROR] Failed to load dev server: ${errorCode} ${errorDescription}`);
+          console.error(`Failed to load dev server: ${errorCode} ${errorDescription}`);
         }
       });
     } else {
       // In production, load the built files
       // Assuming main.js is in 'dist/electron' and renderer output is in 'dist/renderer'
       const indexPath = path.join(__dirname, '../renderer/index.html');
-      console.log(`[DEBUG] Loading file from: ${indexPath}`);
       await mainWindow.loadFile(indexPath);
     }
     
     // Set up IPC handlers
     setupIPCHandlers();
   } catch (error) {
-    console.error(`[ERROR] Failed to load:`, error);
+    console.error(`Failed to load:`, error);
     throw error;
   }
 
@@ -239,9 +233,20 @@ function setupIPCHandlers() {
     }
   });
 
-  // Get initial theme
+  // App settings handlers theme
   ipcMain.handle('dark-mode:get-initial', async () => {
     return store.get('theme', defaultAppSettings.theme);
+  });
+
+  // Handler for reading file content
+  ipcMain.handle('fs:readFile', async (_event, filePath: string): Promise<{ content: string } | { error: string }> => {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      return { content };
+    } catch (err: any) {
+      console.error(`Error reading file ${filePath}:`, err);
+      return { error: err.message || 'Failed to read file' };
+    }
   });
 
   // Handler for reading directory contents
@@ -332,13 +337,29 @@ function setupIPCHandlers() {
       }
     });
 
-    ptyProcess.onExit(({ exitCode }) => {
-      console.log(`Terminal process exited with code ${exitCode}`);
+    ptyProcess.onExit(({ exitCode, signal }) => {
+      console.log(`Terminal process exited with code ${exitCode}, signal ${signal}`);
+      mainWindow?.webContents.send('terminal:exit', { exitCode, signal });
       ptyProcess = null;
     });
   };
 
   // Handle terminal data from renderer
+  ipcMain.on('terminal:init', (_event) => {
+    initPty(); // Call your existing initPty function
+  });
+
+  ipcMain.on('terminal:resize', (_event, { cols, rows }: { cols: number, rows: number }) => {
+    if (ptyProcess) {
+      try {
+        ptyProcess.resize(cols, rows);
+      } catch (e) {
+        // This can happen if the pty is in the process of exiting
+        console.warn('Error resizing PTY, likely already exited:', e);
+      }
+    }
+  });
+
   ipcMain.on('terminal-command', (event, command) => {
     if (ptyProcess) {
       ptyProcess.write(command);
