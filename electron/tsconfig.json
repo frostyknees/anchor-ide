@@ -5,16 +5,35 @@
     "lib": ["ES2020"],
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
+    "skipLibCheck": true, 
     "forceConsistentCasingInFileNames": true,
-    "outDir": "../dist/electron", 
-    "rootDir": ".", 
+    
+    "outDir": "../dist/electron", // Output relative to project root (which is rootDir)
+    "rootDir": "..",              // Set rootDir to the project root (one level up from this tsconfig.json)
+
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "isolatedModules": false,
+    "isolatedModules": false, 
     "types": ["node"],
-    "composite": true 
+    "composite": true,           
+    "declaration": true,         
+    "declarationMap": true
   },
-  "include": ["main.ts", "preload.ts", "electron-env.d.ts"], 
-  "exclude": ["node_modules", "../dist"] 
+  "include": [
+    "electron/main.ts",          // Path relative to new rootDir (project_root/electron/main.ts)
+    "electron/preload.ts",       // Path relative to new rootDir (project_root/electron/preload.ts)
+    "electron/electron-env.d.ts",// Path relative to new rootDir
+    "src/types/index.ts"         // Path relative to new rootDir (project_root/src/types/index.ts)
+  ], 
+  "exclude": [
+    "node_modules",              // Path relative to new rootDir
+    "dist",                      // Exclude the entire dist folder from this compilation's sources (relative to rootDir)
+    // Exclude renderer-specific parts of src, allowing src/types through
+    "src/components",
+    "src/App.tsx",
+    "src/main.tsx",
+    "src/styles",
+    "src/utils.ts" 
+    // Add any other src subfolders that are purely for the renderer
+  ]
 }

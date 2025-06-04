@@ -1,39 +1,139 @@
 // src/components/EditorArea.tsx
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react'; 
 import type * as monacoApi from 'monaco-editor'; 
 import type { DirectoryItem, DocumentSymbol, EditorFile } from '../types'; 
-import { getFileIcon } from '../utils'; 
+import { getFileIcon, getBasename } from '../utils'; 
 
 interface EditorAreaProps { 
   fileToOpen: DirectoryItem | null; 
   isFolderCurrentlyOpen: boolean; 
   onOpenFolder: () => void; 
-  onEditorSymbolsChange: (symbols: DocumentSymbol[]) => void; // Prop remains for future use
-  editorRef: React.MutableRefObject<monacoApi.editor.IStandaloneCodeEditor | null>; 
+  onEditorSymbolsChange: (symbols: DocumentSymbol[]) => void; 
+  editorRef: React.MutableRefObject<monacoApi.editor.IStandaloneCodeEditor | null>;
+  // Props for state persistence
+  initialOpenFiles: string[]; // Paths of files that were open
+  initialActiveFileId: string | null;
+  onOpenFilesChange: (openFilePaths: string[]) => void;
+  onActiveFileChange: (activeFileId: string | null) => void;
 }
 
-const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOpen, onOpenFolder, onEditorSymbolsChange, editorRef }) => {
+const EditorArea: React.FC<EditorAreaProps> = ({ 
+  fileToOpen, 
+  isFolderCurrentlyOpen, 
+  onOpenFolder, 
+  onEditorSymbolsChange, 
+  editorRef,
+  initialOpenFiles,
+  initialActiveFileId,
+  onOpenFilesChange,
+  onActiveFileChange
+}) => {
   const [openFiles, setOpenFiles] = useState<EditorFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false); 
-  // const monacoInstanceRef = useRef<typeof monacoApi | null>(null); // Keep if needed for other monaco API calls
+  //const monacoInstanceRef = useRef<typeof monacoApi | null>(null); 
+  const autoSaveTimeoutRef = useRef<number | null>(null);
+
+  // Effect to load initial open files and set active tab from persisted state
+  useEffect(() => {
+    const loadInitialFiles = async () => {
+      if (initialOpenFiles && initialOpenFiles.length > 0) {
+        const loadedFiles: EditorFile[] = [];
+        for (const filePath of initialOpenFiles) {
+          const result = await window.electronAPI?.readFile(filePath);
+          if (result && 'content' in result) {
+            loadedFiles.push({
+              id: filePath,
+              name: getBasename(filePath), // Assuming getBasename is available
+              content: result.content,
+              isDirty: false,
+            });
+          } else {
+            console.warn(`Could not load persisted file: ${filePath}`);
+          }
+        }
+        setOpenFiles(loadedFiles);
+        if (initialActiveFileId && loadedFiles.find(f => f.id === initialActiveFileId)) {
+          setActiveFileId(initialActiveFileId);
+        } else if (loadedFiles.length > 0) {
+          setActiveFileId(loadedFiles[0].id);
+        }
+      } else if (isFolderCurrentlyOpen) { // If a folder is open but no persisted files, clear tabs
+        setOpenFiles([]);
+        setActiveFileId(null);
+      }
+    };
+    loadInitialFiles();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenFiles, initialActiveFileId, isFolderCurrentlyOpen]); // Run once on mount with initial props
+
+
+  // Propagate open files and active file changes upwards for persistence
+  useEffect(() => {
+    onOpenFilesChange(openFiles.map(f => f.id));
+  }, [openFiles, onOpenFilesChange]);
+
+  useEffect(() => {
+    onActiveFileChange(activeFileId);
+  }, [activeFileId, onActiveFileChange]);
+
+
+  const handleAutoSave = async (filePath: string, content: string) => {
+    console.log(`Auto-saving file: ${filePath}`);
+    
+    if (window.electronAPI?.saveFile) {
+      const result = await window.electronAPI.saveFile(filePath, content);
+      if (result.success) {
+        console.log(`File ${filePath} auto-saved successfully.`);
+        setOpenFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.id === filePath ? { ...file, content, isDirty: false } : file 
+          )
+        );
+      } else {
+        console.error(`Error auto-saving file ${filePath}:`, result.error);
+         setOpenFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.id === filePath ? { ...file, isDirty: true } : file 
+          )
+        );
+      }
+    } else {
+      console.warn("Save file API not available. Auto-save only updated local state.");
+       setOpenFiles(prevFiles => 
+        prevFiles.map(file => 
+          file.id === filePath ? { ...file, content, isDirty: false } : file 
+        )
+      );
+    }
+  };
 
   const handleEditorDidMount: OnMount = (editor, _monaco) => { 
     editorRef.current = editor; 
-    // monacoInstanceRef.current = monaco; // Store if needed for other monaco API calls
-
-    // Clear symbols when editor mounts or model changes, as we are not fetching them for MVP M1.1
+    // monacoInstanceRef.current = monaco; // Not strictly needed if only using editor instance
     onEditorSymbolsChange([]); 
 
     editor.onDidChangeModelContent(() => { 
-      // Debounced symbol update would go here in the future
-      // For now, we can clear or do nothing specific on content change for symbols
-      // onEditorSymbolsChange([]); // Optionally clear if content changes rapidly
+      if (activeFileId) {
+        setOpenFiles(prevFiles =>
+          prevFiles.map(file =>
+            file.id === activeFileId ? { ...file, isDirty: true } : file
+          )
+        );
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+        }
+        autoSaveTimeoutRef.current = window.setTimeout(() => {
+          const currentModel = editor.getModel();
+          if (currentModel && activeFileId) { 
+            handleAutoSave(activeFileId, currentModel.getValue());
+          }
+        }, 1000); // 1000ms delay for auto-save
+      }
     });
     
     editor.onDidChangeModel((_e: monacoApi.editor.IModelChangedEvent) => {
-        // When model changes, clear symbols
         onEditorSymbolsChange([]); 
     });
   };
@@ -52,6 +152,9 @@ const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOp
     }
     return () => {
         if (cleanupThemeListener) cleanupThemeListener();
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
     };
   }, []);
 
@@ -62,7 +165,6 @@ const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOp
         if (existingFile) {
           if (activeFileId !== fileItem.path) {
             setActiveFileId(fileItem.path);
-            onEditorSymbolsChange([]); // Clear symbols when tab changes
           }
           return;
         }
@@ -73,24 +175,24 @@ const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOp
             id: fileItem.path,
             name: fileItem.name,
             content: result.content,
+            isDirty: false,
           };
           setOpenFiles(prev => {
             if (prev.find(f => f.id === newFile.id)) return prev;
             return [...prev, newFile];
           });
           setActiveFileId(newFile.id); 
-          onEditorSymbolsChange([]); // Clear symbols for new file, will be updated if logic is added
         } else {
           console.error("Error reading file for editor:", result?.error);
         }
       }
     };
 
-    if (fileToOpen) {
+    if (fileToOpen && fileToOpen.path !== activeFileId) { // Only load if it's a new file to open
       loadFileContent(fileToOpen);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, [fileToOpen]); 
+  }, [fileToOpen]); // Removed openFiles from dependency to avoid re-triggering on setOpenFiles
 
   useEffect(() => {
     if (!isFolderCurrentlyOpen) {
@@ -100,18 +202,28 @@ const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOp
     }
   }, [isFolderCurrentlyOpen, onEditorSymbolsChange]);
 
-  // When active file ID changes, clear symbols (as we are not fetching them yet)
   useEffect(() => {
-    onEditorSymbolsChange([]);
+    onEditorSymbolsChange([]); // Clear symbols when active file changes, to be repopulated if needed
   }, [activeFileId, onEditorSymbolsChange]); 
 
 
   const handleCloseTab = (fileIdToClose: string, event: React.MouseEvent) => {
     event.stopPropagation(); 
-    const newOpenFiles = openFiles.filter(f => f.id !== fileIdToClose);
-    setOpenFiles(newOpenFiles);
+    const fileToClose = openFiles.find(f => f.id === fileIdToClose);
+    // @ts-ignore
+    if (fileToClose && fileToClose.isDirty) {
+        if (editorRef.current && activeFileId === fileIdToClose) {
+            const model = editorRef.current.getModel();
+            if (model) {
+                handleAutoSave(fileIdToClose, model.getValue()); 
+            }
+        }
+    }
+
+    setOpenFiles(prev => prev.filter(f => f.id !== fileIdToClose));
     if (activeFileId === fileIdToClose) {
-      const newActiveFileId = newOpenFiles.length > 0 ? newOpenFiles[0].id : null;
+      const remainingFiles = openFiles.filter(f => f.id !== fileIdToClose);
+      const newActiveFileId = remainingFiles.length > 0 ? remainingFiles[0].id : null;
       setActiveFileId(newActiveFileId);
       if (!newActiveFileId) {
         onEditorSymbolsChange([]); 
@@ -157,9 +269,12 @@ const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOp
                 alignItems: 'center'
               }}
               onClick={() => setActiveFileId(file.id)}
+              data-file-id={file.id} 
             >
               {getFileIcon(file.name, false)} 
               <span className="ms-1">{file.name}</span>
+              {/* @ts-ignore */}
+              {file.isDirty && <span style={{width: '8px', height: '8px', backgroundColor: 'var(--anchor-accent)', borderRadius: '50%', marginLeft: '8px', display: 'inline-block'}}></span>}
               <i className="bi bi-x small ms-2" onClick={(e) => handleCloseTab(file.id, e)} style={{cursor: 'pointer'}}></i>
             </button>
           ))}
@@ -172,9 +287,16 @@ const EditorArea: React.FC<EditorAreaProps> = ({ fileToOpen, isFolderCurrentlyOp
             height="100%" 
             path={activeEditorFile.id} 
             defaultValue={activeEditorFile.content} 
+            // value={activeEditorFile.content} // Using defaultValue to avoid issues with cursor position during auto-save
             theme={isDarkMode ? "vs-dark" : "light"} 
             options={{ minimap: { enabled: true }, automaticLayout: true }}
             onMount={handleEditorDidMount}
+            onChange={(value) => { // Optional: if you need to react to changes for controlled component
+                if (activeFileId && value !== undefined) {
+                    // This would be for a controlled editor, but auto-save uses getModel().getValue()
+                    // For now, onDidChangeModelContent is primary driver for auto-save
+                }
+            }}
           />
         ) : (
           isFolderCurrentlyOpen && ( 

@@ -1,32 +1,25 @@
+// PROJECT_ROOT/tsconfig.json
 {
   "compilerOptions": {
-    "target": "ES2020", // Or a newer ES version supported by your target Electron Chromium version
+    "target": "ESNext", // Or ES2020, ES2021 etc.
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "module": "ESNext",
     "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "bundler", // Recommended for Vite
+    "moduleResolution": "bundler", // Or "node" if not using Vite's specific mode
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true, // Vite handles the emitting of JS files for the renderer
-    "jsx": "react-jsx", // For React 17+ JSX transform
-
-    /* Linting */
+    "noEmit": true, // Vite handles the emit for the renderer
+    "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
-
-    /* Aliases and Types */
     "paths": {
-      "@/*": ["./src/*"] // Example path alias
+      "@/*": ["./src/*"]
     },
-    "types": ["vite/client"] // Includes Vite client types for env variables, HMR etc.
+    "types": ["vite/client"] // Or other relevant types for your renderer
   },
-  "include": ["src", "vite.config.ts"], // Include your renderer source code and Vite config
-  "references": [{ "path": "./electron/tsconfig.json" }] // Reference the tsconfig for main/preload
+  "include": ["src", "vite.config.ts", "electron/electron-env.d.ts"], // Include src and vite config
+  "references": [
+    { "path": "./electron" } // This tells TypeScript about the electron project
+  ]
 }

@@ -85,3 +85,54 @@
       .panel-resize-handle[data-resize-handle-active] {
          background-color: var(--anchor-accent);
       }
+.draggable {
+  -webkit-app-region: drag;
+}
+
+.non-draggable {
+  -webkit-app-region: no-drag;
+}
+
+/* Optional: Style for the title bar itself if not fully covered by inline styles */
+.title-bar-component {
+  height: 32px; 
+  background-color: var(--anchor-primary); 
+  color: var(--anchor-text-on-primary); 
+  user-select: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  /* WebkitAppRegion: drag; /* Applied via class now */
+}
+
+/* Optional: Style for buttons in the title bar if not fully covered by Bootstrap & inline */
+.title-bar-button {
+  /* WebkitAppRegion: no-drag; /* Applied via class now */
+  color: var(--anchor-text-on-primary); 
+  border: none;
+  background: none;
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default; 
+}
+
+/* Hover effect for all buttons in the title bar */
+.title-bar .btn:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important; /* Subtle white overlay */
+  /* You can also change the icon color if your icons are SVGs or font icons that inherit color */
+  /* color: var(--anchor-accent) !important; */ /* Example: change icon color to accent on hover */
+}
+
+/* Specific hover for the close button for a more distinct effect (optional) */
+.title-bar .window-controls .btn:last-child:hover {
+  background-color: rgba(232, 17, 35, 0.9) !important; /* Red background for close button hover */
+  color: white !important; /* Ensure icon stays visible */
+}
+
+/* Ensure custom title bar buttons maintain their no-drag property even with Bootstrap styles */
+.title-bar .btn.non-draggable {
+  -webkit-app-region: no-drag;
+}

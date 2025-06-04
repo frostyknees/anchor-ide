@@ -1,4 +1,8 @@
+// src/types/index.ts
+// This file will hold shared type definitions for the application.
+
 import type * as monacoApi from 'monaco-editor';
+import React from 'react'; 
 
 export interface DirectoryItem {
   name: string;
@@ -29,15 +33,40 @@ export interface EditorFile {
   id: string; 
   name: string; 
   content: string; 
-  language?: string; 
+  language?: string;
+  isDirty?: boolean; 
 }
 
 export interface ElectronDraggableStyle extends React.CSSProperties {
   WebkitAppRegion?: 'drag' | 'no-drag'; 
 }
 
-// Declare global electronAPI if not already in a global .d.ts file
-// For a cleaner setup, consider a dedicated global.d.ts or vite-env.d.ts
+// --- State Persistence Types ---
+// PanelLayout will store the layout (array of numbers) for each PanelGroup by its ID
+export interface PanelLayout {
+  [groupId: string]: number[]; 
+}
+
+export interface AppSettings {
+  windowBounds?: { width: number; height: number; x?: number; y?: number };
+  isMaximized?: boolean;
+  openedFolderPath?: string | null;
+  openFilePaths?: string[]; 
+  activeFileId?: string | null;
+  chatHistory?: { sender: string, text: string }[];
+  panelVisibility?: {
+    fileExplorer: boolean;
+    outlineView: boolean;
+    chatPanel: boolean;
+    terminalPanel: boolean;
+    devPlanPanel: boolean;
+  };
+  panelLayouts?: PanelLayout; 
+  theme?: 'light' | 'dark' | 'system';
+}
+
+
+// Declare global electronAPI
 declare global {
   interface Window {
     electronAPI?: {
@@ -46,9 +75,14 @@ declare global {
       toggleDarkMode: () => Promise<boolean>;
       setSystemTheme: () => Promise<void>;
       showAppMenu: (position?: { x: number; y: number }) => void;
+      
+      sendWindowControl: (action: 'minimize' | 'maximize' | 'unmaximize' | 'close') => void;
+      onWindowMaximized: (callback: (isMaximized: boolean) => void) => (() => void);
+
       openFolderDialog: () => Promise<string | undefined>;
       readDir: (dirPath: string) => Promise<DirectoryItem[] | { error: string }>;
       readFile: (filePath: string) => Promise<{ content: string } | { error: string }>;
+      saveFile: (filePath: string, content: string) => Promise<FileSystemResult>; 
       createFile: (filePath: string) => Promise<FileSystemResult>;
       createFolder: (folderPath: string) => Promise<FileSystemResult>;
       renameItem: (oldPath: string, newName: string) => Promise<FileSystemResult>; 
@@ -56,6 +90,7 @@ declare global {
       showFileExplorerContextMenu: (itemPath: string, isDirectory: boolean) => void;
       onContextMenuCommand: (callback: (args: {command: string, path: string, isDirectory: boolean}) => void) => (() => void); 
       openPathInTerminal: (path: string) => void; 
+      
       ptyHostWrite: (data: string) => void;
       ptyHostResize: (cols: number, rows: number) => void;
       onPtyHostData: (callback: (data: string | Uint8Array) => void) => (() => void); 
@@ -63,6 +98,9 @@ declare global {
       send: (channel: string, data?: any) => void;
       invoke: (channel: string, ...args: any[]) => Promise<any>;
       on: (channel: string, func: (...args: any[]) => void) => (() => void); 
+
+      getAppSettings: () => Promise<Partial<AppSettings>>;
+      saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
     };
   }
 }
