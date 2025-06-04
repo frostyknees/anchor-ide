@@ -9,7 +9,8 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
-    "noEmit": true, // Vite handles the emit for the renderer
+    "declaration": true,
+    "emitDeclarationOnly": true, // Allow .d.ts emit for project references
     "jsx": "react-jsx",
     "composite": true,
     "paths": {
@@ -17,6 +18,6 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

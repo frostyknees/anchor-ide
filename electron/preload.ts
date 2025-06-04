@@ -1,6 +1,6 @@
 // electron/preload.ts
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { AppSettings, DirectoryItem, FileSystemResult } from '../src/types'; // Assuming types are in src/types
+import type { AppSettings, DirectoryItem, FileSystemResult } from '@src/types'; // Assuming types are in src/types
 
 // Define the ElectronAPI interface that will be exposed to the renderer process
 export interface ElectronAPI {
@@ -61,7 +61,13 @@ const electronAPI: ElectronAPI = {
   setSystemTheme: () => ipcRenderer.invoke('dark-mode:system'),
 
   // Menu
-  showAppMenu: (position?: { x: number, y: number }) => ipcRenderer.send('show-app-menu', position),
+  showAppMenu: (position?: { x: number, y: number }) => {
+    if (position) {
+      return ipcRenderer.invoke('show-app-menu', position);
+    } else {
+      return ipcRenderer.invoke('show-app-menu');
+    }
+  },
   
   // Window Controls
   sendWindowControl: (action) => ipcRenderer.send('window-control', action),
@@ -72,7 +78,7 @@ const electronAPI: ElectronAPI = {
   },
 
   // File System
-  openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
+  openFolderDialog: () => ipcRenderer.invoke('openFolderDialog'),
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
   saveFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:saveFile', filePath, content),
@@ -120,11 +126,13 @@ const electronAPI: ElectronAPI = {
   },
   invoke: (channel: string, ...args: any[]) => {
      const validInvokeChannels = [
+        'openFolderDialog',
         'dialog:openFolder', 
         'dark-mode:toggle', 'dark-mode:system', 'dark-mode:get-initial',
         'fs:readDir', 'fs:readFile', 'fs:createFile', 'fs:createFolder',
         'fs:renameItem', 'fs:deleteItem', 'fs:saveFile',
-        'get-app-settings', 'save-app-settings'
+        'get-app-settings', 'save-app-settings',
+        'show-app-menu'
      ]; 
      if (validInvokeChannels.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
@@ -153,5 +161,31 @@ const electronAPI: ElectronAPI = {
   }
 };
 
-// Expose the electronAPI to the renderer process
+export const exposedAPI = {
+  // Window controls
+  minimize: () => ipcRenderer.send('window-control', 'minimize'),
+  maximize: () => ipcRenderer.send('window-control', 'maximize'),
+  unmaximize: () => ipcRenderer.send('window-control', 'unmaximize'),
+  close: () => ipcRenderer.send('window-control', 'close'),
+  
+  // File dialogs
+  openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
+  
+  // Menu toggle
+  toggleMenu: () => ipcRenderer.send('toggle-menu'),
+  
+  // Listeners
+  onMaximize: (callback: () => void) => {
+    ipcRenderer.on('window-maximized', callback);
+    return () => ipcRenderer.removeListener('window-maximized', callback);
+  },
+  onUnmaximize: (callback: () => void) => {
+    ipcRenderer.on('window-unmaximized', callback);
+    return () => ipcRenderer.removeListener('window-unmaximized', callback);
+  },
+};
+
+contextBridge.exposeInMainWorld('electron', exposedAPI);
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
+
+export type ExposedAPI = typeof exposedAPI;

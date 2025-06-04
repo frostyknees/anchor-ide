@@ -1,5 +1,6 @@
 // src/App.tsx 
-import React, { useState, useEffect, useRef } from 'react'; 
+import React, { useState, useEffect, useRef } from 'react';
+import type { ImperativePanelGroupHandle } from 'react-resizable-panels'; 
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import * as monacoApi from 'monaco-editor';
 
@@ -41,6 +42,7 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
 
 
 const App: React.FC = () => {
+  const leftSidebarStackGroupRef = useRef<ImperativePanelGroupHandle>(null);
   // Visibility states
   const [showFileExplorer, setShowFileExplorer] = useState(true);
   const [showOutlineView, setShowOutlineView] = useState(false); 
@@ -113,15 +115,42 @@ const App: React.FC = () => {
 
 
   const handleToggleMenu = () => { 
-    const hamburgerButton = document.querySelector('.title-bar button:first-child'); 
-    if (hamburgerButton && window.electronAPI?.showAppMenu) {
+    try {
+      const hamburgerButton = document.querySelector('.title-bar button:first-child'); 
+      if (hamburgerButton && window.electronAPI?.showAppMenu) {
         const rect = hamburgerButton.getBoundingClientRect();
-        window.electronAPI.showAppMenu({ x: Math.round(rect.left), y: Math.round(rect.bottom) });
-    } else if (window.electronAPI?.showAppMenu) {
-        window.electronAPI.showAppMenu(); 
+        console.log('Showing menu at position:', { x: rect.left, y: rect.bottom });
+        // Call the method and ignore the Promise since we can't await it here
+        void window.electronAPI.showAppMenu({ x: Math.round(rect.left), y: Math.round(rect.bottom) });
+      } else if (window.electronAPI?.showAppMenu) {
+        console.log('Showing menu at default position');
+        // Call the method and ignore the Promise since we can't await it here
+        void window.electronAPI.showAppMenu();
+      } else {
+        console.error('window.electronAPI.showAppMenu is not available');
+      }
+    } catch (error) {
+      console.error('Error in handleToggleMenu:', error);
     }
   };
-  const handleToggleFileExplorer = () => setShowFileExplorer(prev => !prev);
+  const handleToggleFileExplorer = () => {
+    const nextShowFileExplorer = !showFileExplorer;
+    setShowFileExplorer(nextShowFileExplorer);
+
+    if (nextShowFileExplorer) { // If File Explorer is being turned ON
+      requestAnimationFrame(() => {
+        if (leftSidebarStackGroupRef.current) {
+          let newLayout;
+          if (showOutlineView) { // If OutlineView is also currently visible
+            newLayout = [50, 50]; // Assumes File Explorer is first, Outline second
+          } else {
+            newLayout = [100];    // File Explorer takes all space as it's the only one
+          }
+          leftSidebarStackGroupRef.current.setLayout(newLayout);
+        }
+      });
+    }
+  };
   const handleToggleOutlineView = () => setShowOutlineView(prev => !prev);
   const handleToggleChatPanel = () => setShowChatPanel(prev => !prev);
   const handleToggleTerminalPanel = () => setShowTerminalPanel(prev => !prev);
@@ -158,11 +187,19 @@ const App: React.FC = () => {
     }
   };
   const handleOpenFolder = async () => { 
-    const selectedPath = await window.electronAPI?.openFolderDialog();
-    if (selectedPath) {
-      setOpenedFolderPath(selectedPath);
-      setFileToOpenInEditor(null); 
-      setEditorSymbols([]); 
+    try {
+      console.log('Opening folder dialog...');
+      const selectedPath = await window.electronAPI?.openFolderDialog();
+      console.log('Selected path:', selectedPath);
+      if (selectedPath) {
+        setOpenedFolderPath(selectedPath);
+        setFileToOpenInEditor(null); 
+        setEditorSymbols([]);
+      } else {
+        console.log('No folder selected');
+      }
+    } catch (error) {
+      console.error('Error in handleOpenFolder:', error);
     }
   };
   const handleAddPathToChatContext = (itemPath: string, isDirectory: boolean) => {
@@ -204,15 +241,19 @@ const App: React.FC = () => {
             setPanelLayoutsForPersistence(prev => ({...prev, [MAIN_HORIZONTAL_PANEL_GROUP_ID]: layout}));
         }}
       >
-        {isLeftSidebarStackActuallyVisible && ( 
+        {isLeftSidebarStackActuallyVisible && (
           <>
             <Panel 
+              id="left-sidebar-container-panel" // Added an ID for clarity/consistency
               defaultSize={panelLayoutsForPersistence?.[MAIN_HORIZONTAL_PANEL_GROUP_ID]?.[0] ?? 20} 
-              minSize={15} id={LEFT_SIDEBAR_STACK_PANEL_GROUP_ID} collapsible order={1}
+              minSize={15} 
+              collapsible 
+              order={1}
             >
               <PanelGroup 
-                direction="vertical" 
                 id={LEFT_SIDEBAR_STACK_PANEL_GROUP_ID} 
+                direction="vertical" 
+                ref={leftSidebarStackGroupRef}
                 onLayout={(layout: number[]) => {
                     setPanelLayoutsForPersistence(prev => ({...prev, [LEFT_SIDEBAR_STACK_PANEL_GROUP_ID]: layout}));
                 }}

@@ -5,17 +5,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-const isDev = process.env.NODE_ENV !== 'production';
-
 export default defineConfig({
+  base: '/',
   plugins: [react()],
-  base: './',
-  root: __dirname,
-  publicDir: resolve(__dirname, 'public'),
   build: {
-    outDir: resolve(__dirname, 'dist/electron/renderer'),
+    outDir: 'dist/renderer',
     emptyOutDir: true,
-    assetsInlineLimit: 0, // Ensure all assets are copied as files
+    assetsDir: 'assets',
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
@@ -27,17 +23,25 @@ export default defineConfig({
       },
     },
   },
-  define: {
-    // It's generally safer to avoid defining 'process' for the renderer.
-    // If you need environment variables, use Vite's import.meta.env
-    // 'process.env': {}, // Avoid this
-  },
-  server: {
-    port: 5173, 
-  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 5173,
+    },
+  },
+  define: {
+    'process.env': {}
   },
 });

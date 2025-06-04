@@ -92,3 +92,4 @@ typings/
 out/
 /Docs/vscode-main
 /renderer/dist
+/dist/

@@ -5,15 +5,18 @@
   "description": "An AI-first Integrated Development Environment",
   "main": "dist/electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "build:vite": "vite build",
-    "build:electron": "tsc -p electron/tsconfig.json && vite build --config vite.main.config.ts",
-    "build": "npm run build:vite && npm run build:electron",
-    "start:dev": "npm run build && electron-forge start",
-    "start": "electron-forge start --skip-packager",
+    "dev:renderer": "vite",
+    "dev:main": "npx tsc --build electron/tsconfig.json --watch",
+    "dev:electron": "set NODE_ENV=development&& electron . > electron-dev.log 2>&1",
+    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\" \"wait-on http://localhost:5173 && npm run dev:electron\"",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p electron/tsconfig.json && vite build --config vite.main.config.ts",
+    "build": "npm run build:renderer && npm run build:main",
+    "start": "electron .",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@lydell/node-pty": "latest",
@@ -49,12 +52,17 @@
     "@types/sqlite3": "^3.1.11",
     "@typescript-eslint/eslint-plugin": "^7.10.0",
     "@typescript-eslint/parser": "^7.10.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "electron": "28.3.3",
+    "electron-builder": "^26.0.12",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.7",
     "typescript": "~5.4.5",
-    "vite": "^5.2.11"
+    "vite": "^5.2.11",
+    "vite-plugin-node-polyfills": "^0.23.0",
+    "wait-on": "^8.0.3"
   },
   "config": {
     "forge": {
