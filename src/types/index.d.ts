@@ -35,13 +35,13 @@ export interface PanelLayout {
     [groupId: string]: number[];
 }
 export interface AppSettings {
-    windowBounds: {
+    windowBounds?: {
         width: number;
         height: number;
         x?: number;
         y?: number;
     };
-    isMaximized: boolean;
+    isMaximized?: boolean;
     openedFolderPath: string | null;
     openFilePaths: string[];
     activeFileId: string | null;
@@ -56,7 +56,6 @@ export interface AppSettings {
         terminalPanel: boolean;
         devPlanPanel: boolean;
     };
-    panelLayouts: PanelLayout;
     theme: 'light' | 'dark' | 'system';
 }
 declare global {

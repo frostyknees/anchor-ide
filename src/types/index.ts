@@ -46,8 +46,8 @@ export interface PanelLayout {
 }
 
 export interface AppSettings {
-  windowBounds: { width: number; height: number; x?: number; y?: number }; // Non-optional
-  isMaximized: boolean; // Non-optional
+  windowBounds?: { width: number; height: number; x?: number; y?: number }; // Made optional for renderer saving
+  isMaximized?: boolean; // Made optional for renderer saving
   openedFolderPath: string | null; // Can be null if no folder is open
   openFilePaths: string[];
   activeFileId: string | null; // Can be null if no file is active
@@ -59,7 +59,7 @@ export interface AppSettings {
     terminalPanel: boolean;
     devPlanPanel: boolean;
   };
-  panelLayouts: PanelLayout; // Non-optional, defaults to {}
+  // panelLayouts is removed, react-resizable-panels autoSaveId handles this
   theme: 'light' | 'dark' | 'system'; // Non-optional
 }
 

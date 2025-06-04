@@ -23,16 +23,30 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onOpenFile, rootPathToLoad,
       return;
     }
     setIsLoading(true);
-    setCurrentRootPath(dirPath); 
-    const rootFolderItem: DirectoryItem = {
-      name: getBasename(dirPath), 
-      isDirectory: true,
-      isFile: false,
-      path: dirPath,
-    };
-    setRootItems([rootFolderItem]); 
+    setCurrentRootPath(dirPath);
+    try {
+      const items = await window.electronAPI?.readDir(dirPath);
+      if (items && !('error' in items)) {
+        // Sort items: folders first, then files, then alphabetically
+        const sortedItems = items.sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) {
+            return a.isDirectory ? -1 : 1;
+          }
+          return a.name.localeCompare(b.name);
+        });
+        setRootItems(sortedItems);
+      } else {
+        setRootItems([]);
+        console.error('Error reading directory:', items?.error);
+        // Optionally, display an error to the user
+      }
+    } catch (error) {
+      setRootItems([]);
+      console.error('Exception reading directory:', error);
+      // Optionally, display an error to the user
+    }
     setIsLoading(false);
-    setRefreshNonce(prev => prev + 1); 
+    // refreshNonce might not be needed here anymore if FileExplorerItem handles its own state
   };
   
   useEffect(() => {
@@ -103,7 +117,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onOpenFile, rootPathToLoad,
       {!isLoading && !currentRootPath && <div className="text-muted small p-2">No folder opened.</div>}
       {rootItems.map(item => ( 
         <FileExplorerItem 
-            key={`${item.path}-${refreshNonce}`} 
+            key={item.path} 
             item={item} 
             onOpenItem={onOpenFile} 
             level={0} 

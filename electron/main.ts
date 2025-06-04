@@ -4,10 +4,11 @@ import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron';
 import * as path from 'path';
 import * as pty from '@lydell/node-pty'; 
 import os from 'os';
+import * as fs from 'fs';
 
 const MAIN_WINDOW_VITE_NAME = 'main_window';
 import Store from 'electron-store'; 
-import type { AppSettings, PanelLayout } from '@src/types';
+import type { AppSettings, PanelLayout, DirectoryItem } from '@src/types';
 
 /// <reference types="./electron-env" />
 
@@ -30,7 +31,7 @@ const defaultAppSettings: AppSettings = {
         terminalPanel: true,
         devPlanPanel: true,
     },
-    panelLayouts: {} as PanelLayout, 
+    // panelLayouts is removed as it's handled by react-resizable-panels autoSaveId
     theme: 'system',
 };
 
@@ -109,15 +110,22 @@ const createWindow = async () => {
   console.log(`[ENV_DEBUG] NODE_ENV: ${process.env.NODE_ENV}`);
   console.log(`[ENV_DEBUG] __dirname: ${__dirname}`);
   // Load the last window state or use defaults
-  const windowState = store.get('windowBounds', defaultAppSettings.windowBounds);
-  const isMaximized = store.get('isMaximized', false);
+  const ultimateDefaultWindowBounds = { width: 1280, height: 720, x: undefined, y: undefined }; // Final fallback, ensuring x and y are present
+  const storedWindowBounds = store.get('windowBounds');
+  const windowBoundsToUse = storedWindowBounds ?? defaultAppSettings.windowBounds ?? ultimateDefaultWindowBounds;
+
+  const ultimateDefaultIsMaximized = false; // Final fallback
+  const storedIsMaximized = store.get('isMaximized');
+  const isMaximizedToUse = storedIsMaximized ?? defaultAppSettings.isMaximized ?? ultimateDefaultIsMaximized;
 
   // Create the browser window.
+  const iconPath = process.env.NODE_ENV === 'development' ? path.join(__dirname, '../src/assets/anchor_icon.png') : path.join(process.resourcesPath, 'assets', 'anchor_icon.png');
   mainWindow = new BrowserWindow({
-    width: windowState.width,
-    height: windowState.height,
-    x: windowState.x,
-    y: windowState.y,
+    icon: iconPath,
+    width: windowBoundsToUse.width,
+    height: windowBoundsToUse.height,
+    x: windowBoundsToUse.x,
+    y: windowBoundsToUse.y,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -180,7 +188,6 @@ const createWindow = async () => {
       const bounds = mainWindow.getBounds();
       store.set('windowBounds', {
         ...bounds,
-        isMaximized: mainWindow.isMaximized()
       });
       store.set('isMaximized', mainWindow.isMaximized());
     }
@@ -235,6 +242,48 @@ function setupIPCHandlers() {
   // Get initial theme
   ipcMain.handle('dark-mode:get-initial', async () => {
     return store.get('theme', defaultAppSettings.theme);
+  });
+
+  // Handler for reading directory contents
+  ipcMain.handle('fs:readDir', async (event, dirPath: string) => {
+    try {
+      if (!dirPath || typeof dirPath !== 'string') {
+        console.error('[IPC Main] Invalid dirPath received for fs:readDir:', dirPath);
+        return { error: 'Invalid directory path provided.' };
+      }
+      // console.log(`[IPC Main] Handling fs:readDir for path: ${dirPath}`);
+      const files = await fs.promises.readdir(dirPath);
+      const itemsPromises = files.map(async (file) => {
+        const filePath = path.join(dirPath, file);
+        try {
+          const stats = await fs.promises.stat(filePath);
+          return {
+            name: file,
+            path: filePath,
+            isDirectory: stats.isDirectory(),
+            isFile: stats.isFile(),
+          } as DirectoryItem; // Added type assertion for clarity
+        } catch (statError: any) {
+          console.warn(`[IPC Main] Could not stat file ${filePath}: ${statError.message}`);
+          // For items that can't be stat'd (e.g. broken symlinks, permissions issues)
+          // We can either filter them out or return them with an error property
+          return {
+            name: file,
+            path: filePath,
+            isDirectory: false, // Best guess or mark as unknown
+            isFile: false,      // Best guess or mark as unknown
+            error: `Could not access: ${statError.code || statError.message}`
+          } as DirectoryItem;
+        }
+      });
+      
+      const items = await Promise.all(itemsPromises);
+      // console.log(`[IPC Main] fs:readDir returning ${items.length} items for ${dirPath}`);
+      return items;
+    } catch (error: any) {
+      console.error(`[IPC Main] Error reading directory ${dirPath}: ${error.message}`, error.stack);
+      return { error: error.message || 'Failed to read directory' };
+    }
   });
 
   // Get app settings
@@ -407,22 +456,14 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Handle before-quit event to ensure clean shutdown
-app.on('before-quit', (event) => {
-  if (process.platform !== 'darwin') {
-    // Prevent the default quit behavior
-    event.preventDefault();
-    
-    // Destroy the window and quit
-    if (mainWindow) {
-      mainWindow.destroy();
-      mainWindow = null;
-    }
-    
-    // Give some time for cleanup
-    setTimeout(() => {
-      app.exit(0);
-    }, 100);
+app.on('before-quit', () => {
+  console.log('[DEBUG] App before-quit event triggered.');
+  if (ptyProcess) {
+    console.log('[DEBUG] Killing ptyProcess from before-quit.');
+    ptyProcess.kill();
+    ptyProcess = null;
   }
+  // Allow app.quit() to proceed with its lifecycle, which will handle window destruction.
 });
 
 // Handle app activation (macOS)

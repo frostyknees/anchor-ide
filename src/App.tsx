@@ -1,6 +1,6 @@
 // src/App.tsx 
 import React, { useState, useEffect, useRef } from 'react';
-import type { ImperativePanelGroupHandle } from 'react-resizable-panels'; 
+import type { ImperativePanelGroupHandle, ImperativePanelHandle } from 'react-resizable-panels'; 
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import * as monacoApi from 'monaco-editor';
 
@@ -42,7 +42,17 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
 
 
 const App: React.FC = () => {
+  const mainHorizontalPanelGroupRef = useRef<ImperativePanelGroupHandle>(null);
   const leftSidebarStackGroupRef = useRef<ImperativePanelGroupHandle>(null);
+  const centerStackPanelGroupRef = useRef<ImperativePanelGroupHandle>(null); // For Editor/Terminal group
+
+  // Refs for individual Panels to be collapsed/expanded
+  const leftSidebarContainerPanelRef = useRef<ImperativePanelHandle>(null);
+  const chatPanelRef = useRef<ImperativePanelHandle>(null);
+  const devPlanPanelRef = useRef<ImperativePanelHandle>(null);
+  const terminalPanelRef = useRef<ImperativePanelHandle>(null);
+  const fileExplorerPanelRef = useRef<ImperativePanelHandle>(null);
+  const outlineViewPanelRef = useRef<ImperativePanelHandle>(null);
   // Visibility states
   const [showFileExplorer, setShowFileExplorer] = useState(true);
   const [showOutlineView, setShowOutlineView] = useState(false); 
@@ -59,30 +69,28 @@ const App: React.FC = () => {
   const editorInstanceRef = useRef<monacoApi.editor.IStandaloneCodeEditor | null>(null);
   const [openEditorFilePathsForPersistence, setOpenEditorFilePathsForPersistence] = useState<string[]>([]);
   const [activeEditorFileIdForPersistence, setActiveEditorFileIdForPersistence] = useState<string | null>(null);
-
-  const [panelLayoutsForPersistence, setPanelLayoutsForPersistence] = useState<PanelLayout>({});
-
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>('system');
 
   // --- Load settings on mount ---
   useEffect(() => {
     const loadSettings = async () => {
-      const settings = await window.electronAPI?.getAppSettings();
-      if (settings) {
-        console.log("Loaded settings:", settings);
-        if (settings.openedFolderPath !== undefined) setOpenedFolderPath(settings.openedFolderPath);
-        if (settings.panelVisibility) {
-          setShowFileExplorer(settings.panelVisibility.fileExplorer ?? true);
-          setShowOutlineView(settings.panelVisibility.outlineView ?? false); 
-          setShowChatPanel(settings.panelVisibility.chatPanel ?? true);
-          setShowTerminalPanel(settings.panelVisibility.terminalPanel ?? true);
-          setShowDevPlanPanel(settings.panelVisibility.devPlanPanel ?? true);
+      const loadedSettings = await window.electronAPI?.getAppSettings();
+      if (loadedSettings) {
+        console.log("Loaded settings:", loadedSettings);
+        if (loadedSettings.openedFolderPath !== undefined) setOpenedFolderPath(loadedSettings.openedFolderPath);
+        if (loadedSettings.panelVisibility) {
+          setShowFileExplorer(loadedSettings.panelVisibility.fileExplorer ?? true);
+          setShowOutlineView(loadedSettings.panelVisibility.outlineView ?? false);
+          setShowChatPanel(loadedSettings.panelVisibility.chatPanel ?? true);
+          setShowTerminalPanel(loadedSettings.panelVisibility.terminalPanel ?? false);
+          setShowDevPlanPanel(loadedSettings.panelVisibility.devPlanPanel ?? false);
         }
-        if (settings.panelLayouts) {
-            setPanelLayoutsForPersistence(settings.panelLayouts);
-        }
-        if (settings.chatHistory) setChatHistoryForPersistence(settings.chatHistory); 
-        if (settings.openFilePaths) setOpenEditorFilePathsForPersistence(settings.openFilePaths); 
-        if (settings.activeFileId !== undefined) setActiveEditorFileIdForPersistence(settings.activeFileId); 
+        setCurrentTheme(loadedSettings.theme || 'system');
+        // panelLayoutsForPersistence is removed, autoSaveId handles this now
+        setChatHistoryForPersistence(loadedSettings.chatHistory || []);
+        setOpenEditorFilePathsForPersistence(loadedSettings.openFilePaths || []); // Corrected property name
+        setActiveEditorFileIdForPersistence(loadedSettings.activeFileId || null); // Corrected property name
+        setOpenedFolderPath(loadedSettings.openedFolderPath || '');
       }
     };
     loadSettings();
@@ -90,8 +98,7 @@ const App: React.FC = () => {
 
   // --- Save settings on change ---
   const saveCurrentAppSettings = () => {
-    const currentSettings: Partial<AppSettings> = {
-      openedFolderPath,
+    const settingsToSave: AppSettings = {
       panelVisibility: {
         fileExplorer: showFileExplorer,
         outlineView: showOutlineView,
@@ -99,19 +106,22 @@ const App: React.FC = () => {
         terminalPanel: showTerminalPanel,
         devPlanPanel: showDevPlanPanel,
       },
-      panelLayouts: panelLayoutsForPersistence, 
-      chatHistory: chatHistoryForPersistence, 
-      openFilePaths: openEditorFilePathsForPersistence, 
-      activeFileId: activeEditorFileIdForPersistence, 
+      theme: currentTheme,
+      // panelLayouts is removed, autoSaveId handles this now
+      chatHistory: chatHistoryForPersistence,
+      openFilePaths: openEditorFilePathsForPersistence, // Corrected property name
+      activeFileId: activeEditorFileIdForPersistence, // Corrected property name
+      openedFolderPath,
+      // windowBounds and isMaximized are not saved from renderer
     };
-    window.electronAPI?.saveAppSettings(currentSettings);
+    window.electronAPI?.saveAppSettings(settingsToSave);
   };
 
   const debouncedSaveSettings = useRef(debounce(saveCurrentAppSettings, 1000)).current;
 
   useEffect(() => {
     debouncedSaveSettings();
-  }, [openedFolderPath, showFileExplorer, showOutlineView, showChatPanel, showTerminalPanel, showDevPlanPanel, chatHistoryForPersistence, openEditorFilePathsForPersistence, activeEditorFileIdForPersistence, panelLayoutsForPersistence]);
+  }, [openedFolderPath, showFileExplorer, showOutlineView, showChatPanel, showTerminalPanel, showDevPlanPanel, chatHistoryForPersistence, openEditorFilePathsForPersistence, activeEditorFileIdForPersistence, currentTheme]);
 
 
   const handleToggleMenu = () => { 
@@ -137,24 +147,61 @@ const App: React.FC = () => {
     const nextShowFileExplorer = !showFileExplorer;
     setShowFileExplorer(nextShowFileExplorer);
 
-    if (nextShowFileExplorer) { // If File Explorer is being turned ON
-      requestAnimationFrame(() => {
-        if (leftSidebarStackGroupRef.current) {
-          let newLayout;
-          if (showOutlineView) { // If OutlineView is also currently visible
-            newLayout = [50, 50]; // Assumes File Explorer is first, Outline second
-          } else {
-            newLayout = [100];    // File Explorer takes all space as it's the only one
-          }
-          leftSidebarStackGroupRef.current.setLayout(newLayout);
-        }
-      });
+    if (nextShowFileExplorer) {
+      fileExplorerPanelRef.current?.expand();
+      if (!showOutlineView) { // If outline is hidden, expanding FE means expanding the container
+        leftSidebarContainerPanelRef.current?.expand();
+      }
+    } else {
+      fileExplorerPanelRef.current?.collapse();
+      if (!showOutlineView) { // If outline is also hidden (or becoming hidden), collapse container
+        leftSidebarContainerPanelRef.current?.collapse();
+      }
     }
   };
-  const handleToggleOutlineView = () => setShowOutlineView(prev => !prev);
-  const handleToggleChatPanel = () => setShowChatPanel(prev => !prev);
-  const handleToggleTerminalPanel = () => setShowTerminalPanel(prev => !prev);
-  const handleToggleDevPlanPanel = () => setShowDevPlanPanel(prev => !prev);
+  const handleToggleOutlineView = () => {
+    const nextShowOutlineView = !showOutlineView;
+    setShowOutlineView(nextShowOutlineView);
+
+    if (nextShowOutlineView) {
+      outlineViewPanelRef.current?.expand();
+      if (!showFileExplorer) { // If file explorer is hidden, expanding OV means expanding the container
+        leftSidebarContainerPanelRef.current?.expand();
+      }
+    } else {
+      outlineViewPanelRef.current?.collapse();
+      if (!showFileExplorer) { // If file explorer is also hidden (or becoming hidden), collapse container
+        leftSidebarContainerPanelRef.current?.collapse();
+      }
+    }
+  };
+  const handleToggleChatPanel = () => {
+    const nextShowChatPanel = !showChatPanel;
+    setShowChatPanel(nextShowChatPanel);
+    if (nextShowChatPanel) {
+      chatPanelRef.current?.expand();
+    } else {
+      chatPanelRef.current?.collapse();
+    }
+  };
+  const handleToggleTerminalPanel = () => {
+    const nextShowTerminalPanel = !showTerminalPanel;
+    setShowTerminalPanel(nextShowTerminalPanel);
+    if (nextShowTerminalPanel) {
+      terminalPanelRef.current?.expand();
+    } else {
+      terminalPanelRef.current?.collapse();
+    }
+  };
+  const handleToggleDevPlanPanel = () => {
+    const nextShowDevPlanPanel = !showDevPlanPanel;
+    setShowDevPlanPanel(nextShowDevPlanPanel);
+    if (nextShowDevPlanPanel) {
+      devPlanPanelRef.current?.expand();
+    } else {
+      devPlanPanelRef.current?.collapse();
+    }
+  };
   
   useEffect(() => { 
     const forceResize = () => requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
@@ -235,17 +282,18 @@ const App: React.FC = () => {
       
       <PanelGroup 
         direction="horizontal" 
+        ref={mainHorizontalPanelGroupRef} // Added ref
         className="main-content-area"
         id={MAIN_HORIZONTAL_PANEL_GROUP_ID} 
-        onLayout={(layout: number[]) => {
-            setPanelLayoutsForPersistence(prev => ({...prev, [MAIN_HORIZONTAL_PANEL_GROUP_ID]: layout}));
-        }}
+        autoSaveId={MAIN_HORIZONTAL_PANEL_GROUP_ID} // Added autoSaveId
       >
         {isLeftSidebarStackActuallyVisible && (
-          <>
+          <React.Fragment key="left-sidebar-fragment">
             <Panel 
-              id="left-sidebar-container-panel" // Added an ID for clarity/consistency
-              defaultSize={panelLayoutsForPersistence?.[MAIN_HORIZONTAL_PANEL_GROUP_ID]?.[0] ?? 20} 
+              ref={leftSidebarContainerPanelRef} // Added ref
+              key="left-sidebar-container-panel" 
+              id="left-sidebar-container-panel" 
+              defaultSize={20} // Simplified defaultSize, autoSave will handle persisted
               minSize={15} 
               collapsible 
               order={1}
@@ -254,14 +302,13 @@ const App: React.FC = () => {
                 id={LEFT_SIDEBAR_STACK_PANEL_GROUP_ID} 
                 direction="vertical" 
                 ref={leftSidebarStackGroupRef}
-                onLayout={(layout: number[]) => {
-                    setPanelLayoutsForPersistence(prev => ({...prev, [LEFT_SIDEBAR_STACK_PANEL_GROUP_ID]: layout}));
-                }}
+                autoSaveId={LEFT_SIDEBAR_STACK_PANEL_GROUP_ID} // Added autoSaveId
               >
                 {showFileExplorer && (
                   <>
                     <Panel 
-                        defaultSize={panelLayoutsForPersistence?.[LEFT_SIDEBAR_STACK_PANEL_GROUP_ID]?.[0] ?? (showOutlineView ? 65 : 100)} 
+                        ref={fileExplorerPanelRef} // Added ref
+                        defaultSize={showOutlineView ? 65 : 100} // Simplified defaultSize
                         minSize={20} id={LEFT_SIDEBAR_FILE_EXPLORER_ID} collapsible order={1}> 
                       <FileExplorer 
                         onOpenFile={handleOpenFileInEditor} 
@@ -269,26 +316,28 @@ const App: React.FC = () => {
                         onAddPathToChatContext={handleAddPathToChatContext} 
                       />
                     </Panel>
-                    {showOutlineView && <PanelResizeHandle className="panel-resize-handle" style={{height: '4px'}}/>}
+                    {showOutlineView && <PanelResizeHandle key="left-sidebar-resize-handle" className="panel-resize-handle" style={{height: '4px'}}/>}
                   </>
                 )}
                 {showOutlineView && (
                   <Panel 
-                    defaultSize={panelLayoutsForPersistence?.[LEFT_SIDEBAR_STACK_PANEL_GROUP_ID]?.[showFileExplorer ? 1 : 0] ?? (showFileExplorer ? 35 : 100)} 
+                    ref={outlineViewPanelRef} // Added ref
+                    defaultSize={showFileExplorer ? 35 : 100} // Simplified defaultSize
                     minSize={15} id={LEFT_SIDEBAR_OUTLINE_VIEW_ID} collapsible order={2}> 
                     <OutlineView symbols={editorSymbols} onSymbolClick={handleSymbolClick} />
                   </Panel>
                 )}
               </PanelGroup>
             </Panel>
-            <PanelResizeHandle className="panel-resize-handle" style={{width: '4px'}}/>
-          </>
+            <PanelResizeHandle key="left-main-resize-handle" className="panel-resize-handle" style={{width: '4px'}}/>
+          </React.Fragment>
         )}
 
         {showChatPanel && (
           <>
             <Panel 
-              defaultSize={panelLayoutsForPersistence?.[MAIN_HORIZONTAL_PANEL_GROUP_ID]?.[isLeftSidebarStackActuallyVisible ? 1 : 0] ?? 25} 
+              ref={chatPanelRef} // Added ref
+              defaultSize={25} // Simplified defaultSize
               minSize={20} id={CHAT_PANEL_ID} collapsible order={2}
             >
               <ChatWindow 
@@ -297,7 +346,7 @@ const App: React.FC = () => {
                 onHistoryChange={setChatHistoryForPersistence} 
               /> 
             </Panel>
-            <PanelResizeHandle className="panel-resize-handle" style={{width: '4px'}}/>
+            <PanelResizeHandle key="chat-main-resize-handle" className="panel-resize-handle" style={{width: '4px'}}/>
           </>
         )}
 
@@ -305,12 +354,11 @@ const App: React.FC = () => {
           <PanelGroup 
             direction="vertical" 
             id={CENTER_STACK_PANEL_GROUP_ID} 
-            onLayout={(layout: number[]) => {
-                setPanelLayoutsForPersistence(prev => ({...prev, [CENTER_STACK_PANEL_GROUP_ID]: layout}));
-            }}
+            ref={centerStackPanelGroupRef} // Added ref
+            autoSaveId={CENTER_STACK_PANEL_GROUP_ID} // Added autoSaveId
           >
             <Panel 
-                defaultSize={panelLayoutsForPersistence?.[CENTER_STACK_PANEL_GROUP_ID]?.[0] ?? (showTerminalPanel ? 70 : 100)} 
+                defaultSize={showTerminalPanel ? 70 : 100} // Simplified defaultSize
                 minSize={30} id={EDITOR_PANEL_ID} order={1}> 
                  <EditorArea 
                     fileToOpen={fileToOpenInEditor} 
@@ -326,9 +374,10 @@ const App: React.FC = () => {
             </Panel>
             {showTerminalPanel && ( 
                 <>
-                    <PanelResizeHandle className="panel-resize-handle" style={{height: '4px'}}/>
+                    <PanelResizeHandle key="center-terminal-resize-handle" className="panel-resize-handle" style={{height: '4px'}}/>
                     <Panel 
-                        defaultSize={panelLayoutsForPersistence?.[CENTER_STACK_PANEL_GROUP_ID]?.[1] ?? 30} 
+                        ref={terminalPanelRef} // Added ref
+                        defaultSize={30} // Simplified defaultSize
                         minSize={15} id={TERMINAL_PANEL_ID} collapsible order={2} className="terminal-panel-wrapper">
                       <Terminal />
                     </Panel>
@@ -339,9 +388,10 @@ const App: React.FC = () => {
         
         {showDevPlanPanel && (
             <>
-                <PanelResizeHandle className="panel-resize-handle" style={{width: '4px'}} />
+                <PanelResizeHandle key="main-dev-plan-resize-handle" className="panel-resize-handle" style={{width: '4px'}} />
                 <Panel 
-                    defaultSize={panelLayoutsForPersistence?.[MAIN_HORIZONTAL_PANEL_GROUP_ID]?.[(isLeftSidebarStackActuallyVisible ? 1 : 0) + (showChatPanel ? 1 : 0) + 1] ?? 20} 
+                    ref={devPlanPanelRef} // Added ref
+                    defaultSize={20} // Simplified defaultSize
                     minSize={15} id={DEV_PLAN_PANEL_ID} collapsible order={4}>
                     <DevelopmentPlanPane />
                 </Panel>

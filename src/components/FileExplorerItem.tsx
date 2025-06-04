@@ -99,7 +99,7 @@ const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, l
           {isLoading && <div style={{ paddingLeft: `10px` }} className="text-muted small">Loading...</div>}
           {children.map(child => (
             <FileExplorerItem 
-              key={`${child.path}-${refreshNonce}`} 
+              key={child.path} 
               item={child} 
               onOpenItem={onOpenItem} 
               level={level + 1} 
