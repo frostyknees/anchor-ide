@@ -3,6 +3,8 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, dialog } from 'electron
 import * as path from 'path';
 import * as pty from '@lydell/node-pty'; 
 import os from 'os';
+
+const MAIN_WINDOW_VITE_NAME = 'main_window';
 import fs from 'fs/promises'; 
 import Store from 'electron-store'; 
 import type { AppSettings, PanelLayout } from '../src/types'; // This import should now work
@@ -70,63 +72,95 @@ const createWindow = () => {
     mainWindow.maximize();
   }
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+  // Ensure mainWindow exists before proceeding
+  if (!mainWindow) {
+    console.error('Failed to create main window');
+    return;
   }
 
-  if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-    mainWindow.webContents.openDevTools();
-  }
+  // Store a local reference to mainWindow to help TypeScript with type inference
+  const win = mainWindow;
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow?.webContents.send('update-theme', nativeTheme.shouldUseDarkColors);
-    if (mainWindow) {
-        mainWindow.webContents.send('window-maximized', mainWindow.isMaximized());
+  const loadMainWindow = (window: BrowserWindow) => {
+    if (process.env.VITE_DEV_SERVER_URL) {
+      window.loadURL(process.env.VITE_DEV_SERVER_URL).catch(err => {
+        console.error('Failed to load dev server URL:', err);
+      });
+    } else {
+      // In production, load from the correct path
+      const indexPath = path.join(__dirname, '../../dist/index.html');
+      console.log('Loading from path:', indexPath);
+      
+      window.loadFile(indexPath).catch(err => {
+        console.error('Failed to load index.html:', err);
+        // Try alternative path if the first one fails
+        const altPath = path.join(__dirname, '../dist/index.html');
+        console.log('Trying alternative path:', altPath);
+        window.loadFile(altPath).catch(err2 => {
+          console.error('Failed to load from alternative path:', err2);
+        });
+      });
     }
-  });
-
-  nativeTheme.on('updated', () => {
-    mainWindow?.webContents.send('update-theme', nativeTheme.shouldUseDarkColors);
-    store.set('theme', nativeTheme.themeSource); 
-  });
-
-  mainWindow.on('maximize', () => {
-    store.set('isMaximized', true);
-    mainWindow?.webContents.send('window-maximized', true);
-  });
-  mainWindow.on('unmaximize', () => {
-    store.set('isMaximized', false);
-    mainWindow?.webContents.send('window-maximized', false);
-    saveBounds(); 
-  });
-
-  let resizeTimeout: NodeJS.Timeout;
-  const saveBounds = () => {
-    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isMinimized() || mainWindow.isFullScreen()) {
-        return;
-    }
-    store.set('windowBounds', mainWindow.getBounds());
   };
 
-  mainWindow.on('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(saveBounds, 500);
-  });
-  mainWindow.on('move', () => { 
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(saveBounds, 500);
-  });
-  
-  mainWindow.on('close', () => { 
-    if (mainWindow && !mainWindow.isMaximized() && !mainWindow.isMinimized() && !mainWindow.isFullScreen()) {
-        store.set('windowBounds', mainWindow.getBounds());
+  // Set up window event listeners
+  const setupWindowListeners = (window: BrowserWindow) => {
+    if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
+      window.webContents.openDevTools();
     }
-    store.set('isMaximized', mainWindow?.isMaximized() ?? false);
-  });
 
-  mainWindow.on('closed', () => {
+    window.webContents.on('did-finish-load', () => {
+      window.webContents.send('update-theme', nativeTheme.shouldUseDarkColors);
+      window.webContents.send('window-maximized', window.isMaximized());
+    });
+
+    nativeTheme.on('updated', () => {
+      window.webContents.send('update-theme', nativeTheme.shouldUseDarkColors);
+      store.set('theme', nativeTheme.themeSource); 
+    });
+
+    window.on('maximize', () => {
+      store.set('isMaximized', true);
+      window.webContents.send('window-maximized', true);
+    });
+    
+    window.on('unmaximize', () => {
+      store.set('isMaximized', false);
+      window.webContents.send('window-maximized', false);
+      saveBounds(window); 
+    });
+
+    let resizeTimeout: NodeJS.Timeout;
+    const saveBounds = (w: BrowserWindow) => {
+      if (w.isMaximized() || w.isMinimized() || w.isFullScreen()) {
+        return;
+      }
+      store.set('windowBounds', w.getBounds());
+    };
+
+    window.on('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => saveBounds(window), 500);
+    });
+    
+    window.on('move', () => { 
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => saveBounds(window), 500);
+    });
+    
+    window.on('close', () => { 
+      if (!window.isMaximized() && !window.isMinimized() && !window.isFullScreen()) {
+        store.set('windowBounds', window.getBounds());
+      }
+      store.set('isMaximized', window.isMaximized());
+    });
+  };
+  
+  // Initialize the window
+  loadMainWindow(win);
+  setupWindowListeners(win);
+
+  win.on('closed', () => {
     mainWindow = null;
     if (ptyProcess) {
       ptyProcess.kill();

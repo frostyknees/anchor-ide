@@ -35,29 +35,29 @@ export interface PanelLayout {
     [groupId: string]: number[];
 }
 export interface AppSettings {
-    windowBounds?: {
+    windowBounds: {
         width: number;
         height: number;
         x?: number;
         y?: number;
     };
-    isMaximized?: boolean;
-    openedFolderPath?: string | null;
-    openFilePaths?: string[];
-    activeFileId?: string | null;
-    chatHistory?: {
+    isMaximized: boolean;
+    openedFolderPath: string | null;
+    openFilePaths: string[];
+    activeFileId: string | null;
+    chatHistory: {
         sender: string;
         text: string;
     }[];
-    panelVisibility?: {
+    panelVisibility: {
         fileExplorer: boolean;
         outlineView: boolean;
         chatPanel: boolean;
         terminalPanel: boolean;
         devPlanPanel: boolean;
     };
-    panelLayouts?: PanelLayout;
-    theme?: 'light' | 'dark' | 'system';
+    panelLayouts: PanelLayout;
+    theme: 'light' | 'dark' | 'system';
 }
 declare global {
     interface Window {

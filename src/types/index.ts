@@ -41,28 +41,26 @@ export interface ElectronDraggableStyle extends React.CSSProperties {
   WebkitAppRegion?: 'drag' | 'no-drag'; 
 }
 
-// --- State Persistence Types ---
-// PanelLayout will store the layout (array of numbers) for each PanelGroup by its ID
 export interface PanelLayout {
   [groupId: string]: number[]; 
 }
 
 export interface AppSettings {
-  windowBounds?: { width: number; height: number; x?: number; y?: number };
-  isMaximized?: boolean;
-  openedFolderPath?: string | null;
-  openFilePaths?: string[]; 
-  activeFileId?: string | null;
-  chatHistory?: { sender: string, text: string }[];
-  panelVisibility?: {
+  windowBounds: { width: number; height: number; x?: number; y?: number }; // Non-optional
+  isMaximized: boolean; // Non-optional
+  openedFolderPath: string | null; // Can be null if no folder is open
+  openFilePaths: string[];
+  activeFileId: string | null; // Can be null if no file is active
+  chatHistory: { sender: string, text: string }[];
+  panelVisibility: { // Non-optional
     fileExplorer: boolean;
     outlineView: boolean;
     chatPanel: boolean;
     terminalPanel: boolean;
     devPlanPanel: boolean;
   };
-  panelLayouts?: PanelLayout; 
-  theme?: 'light' | 'dark' | 'system';
+  panelLayouts: PanelLayout; // Non-optional, defaults to {}
+  theme: 'light' | 'dark' | 'system'; // Non-optional
 }
 
 
@@ -99,7 +97,7 @@ declare global {
       invoke: (channel: string, ...args: any[]) => Promise<any>;
       on: (channel: string, func: (...args: any[]) => void) => (() => void); 
 
-      getAppSettings: () => Promise<Partial<AppSettings>>;
+      getAppSettings: () => Promise<Partial<AppSettings>>; // Can still be Partial for flexibility from renderer
       saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
     };
   }

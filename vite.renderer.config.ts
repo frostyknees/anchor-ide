@@ -4,15 +4,21 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: './', 
+  base: './',
+  root: __dirname,
+  publicDir: 'public',
   build: {
-    outDir: 'dist/renderer', 
+    outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
       },
-      external: ['electron', 'path', 'fs', 'os', 'child_process', '@lydell/node-pty'], 
+      output: {
+        entryFileNames: 'renderer/assets/[name].js',
+        chunkFileNames: 'renderer/assets/[name].[hash].js',
+        assetFileNames: 'renderer/assets/[name].[ext]',
+      },
     },
   },
   define: {

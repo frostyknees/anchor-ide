@@ -1,25 +1,22 @@
-// PROJECT_ROOT/tsconfig.json
+// PROJECT_ROOT/tsconfig.json - For Vite/React renderer process
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ESNext", // Or ES2020, ES2021 etc.
+    "target": "ESNext",
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler", // Or "node" if not using Vite's specific mode
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true, // Vite handles the emit for the renderer
     "jsx": "react-jsx",
-    "strict": true,
+    "composite": true,
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["vite/client"] // Or other relevant types for your renderer
+    "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts", "electron/electron-env.d.ts"], // Include src and vite config
-  "references": [
-    { "path": "./electron" } // This tells TypeScript about the electron project
-  ]
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["node_modules", "dist"]
 }
