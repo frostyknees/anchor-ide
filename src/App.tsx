@@ -1,5 +1,5 @@
 // src/App.tsx 
-/// <reference path="./types/index.d.ts" />
+/// <reference path="./types/index.ts" />
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ImperativePanelGroupHandle, ImperativePanelHandle } from 'react-resizable-panels'; 
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';

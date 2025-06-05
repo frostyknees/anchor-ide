@@ -5,7 +5,7 @@ import type { AppSettings, DirectoryItem, FileSystemResult, ElectronAPI } from '
 // Implementation of the ElectronAPI
 const electronAPI: ElectronAPI = {
   // Theme
-  onUpdateTheme: (callback) => {
+  onUpdateTheme: (callback: (isDarkMode: boolean) => void) => { // Added type
     const handler = (_event: IpcRendererEvent, isDarkMode: boolean) => callback(isDarkMode);
     ipcRenderer.on('update-theme', handler);
     return () => ipcRenderer.removeListener('update-theme', handler);
@@ -24,8 +24,8 @@ const electronAPI: ElectronAPI = {
   },
   
   // Window Controls
-  sendWindowControl: (action) => ipcRenderer.send('window-control', action),
-  onWindowMaximized: (callback) => {
+  sendWindowControl: (action: 'minimize' | 'maximize' | 'unmaximize' | 'close') => ipcRenderer.send('window-control', action), // Added type
+  onWindowMaximized: (callback: (isMaximized: boolean) => void) => { // Added type
     const handler = (_event: IpcRendererEvent, isMaximized: boolean) => callback(isMaximized);
     ipcRenderer.on('window-maximized', handler);
     return () => ipcRenderer.removeListener('window-maximized', handler);
@@ -43,7 +43,7 @@ const electronAPI: ElectronAPI = {
 
   // Context Menu
   showFileExplorerContextMenu: (itemPath: string, isDirectory: boolean) => ipcRenderer.send('show-file-explorer-context-menu', itemPath, isDirectory),
-  onContextMenuCommand: (callback) => {
+  onContextMenuCommand: (callback: (args: {command: string, path: string, isDirectory: boolean}) => void) => { // Added type
     const handler = (_event: IpcRendererEvent, args: {command: string, path: string, isDirectory: boolean}) => callback(args);
     ipcRenderer.on('context-menu-command', handler);
     return () => ipcRenderer.removeListener('context-menu-command', handler);
@@ -67,26 +67,23 @@ const electronAPI: ElectronAPI = {
 
   // State Persistence
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
-  saveAppSettings: (settings) => ipcRenderer.invoke('save-app-settings', settings),
+  saveAppSettings: (settings: Partial<AppSettings>) => ipcRenderer.invoke('save-app-settings', settings),
   saveOpenedFolder: (folderPath: string | null) => ipcRenderer.send('workspace:save-opened-folder', folderPath),
-  saveOpenFiles: (openFilePaths: string[]): Promise<boolean> => {
-    console.log('[Preload] Invoking save-open-files with:', openFilePaths);
-    return ipcRenderer.invoke('save-open-files', openFilePaths);
-  },
+  saveOpenFiles: (openFilePaths: string[]): Promise<boolean> => ipcRenderer.invoke('save-open-files', openFilePaths),
   saveActiveFile: (activeFilePath: string | null) => ipcRenderer.invoke('workspace:save-active-file', activeFilePath),
   getOpenFiles: () => ipcRenderer.invoke('workspace:get-open-files'),
   getActiveFile: () => ipcRenderer.invoke('workspace:get-active-file'),
-  onRestoreOpenedFolder: (callback) => {
+  onRestoreOpenedFolder: (callback: (folderPath: string) => void) => { // Added type
     const handler = (_event: IpcRendererEvent, folderPath: string) => callback(folderPath);
     ipcRenderer.on('restore-opened-folder', handler);
     return () => ipcRenderer.removeListener('restore-opened-folder', handler);
   },
-  onRestoreOpenFiles: (callback) => {
+  onRestoreOpenFiles: (callback: (filePaths: string[]) => void) => { // Added type
     const handler = (_event: IpcRendererEvent, filePaths: string[]) => callback(filePaths);
     ipcRenderer.on('restore-open-files', handler);
     return () => ipcRenderer.removeListener('restore-open-files', handler);
   },
-  onRestoreActiveFile: (callback) => {
+  onRestoreActiveFile: (callback: (activeFilePath: string | null) => void) => { // Added type
     const handler = (_event: IpcRendererEvent, activeFilePath: string | null) => callback(activeFilePath);
     ipcRenderer.on('restore-active-file', handler);
     return () => ipcRenderer.removeListener('restore-active-file', handler);

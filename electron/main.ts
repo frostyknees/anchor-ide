@@ -1,9 +1,11 @@
 // electron/main.ts
 import { app, BrowserWindow, ipcMain, dialog, shell as electronShell, Menu, MenuItemConstructorOptions } from 'electron';
 import * as path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
 import * as pty from '@lydell/node-pty'; 
 import os from 'os';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 
 // const MAIN_WINDOW_VITE_NAME = 'main_window'; // Not directly used, can be removed if not needed elsewhere
 import Store from 'electron-store'; 
@@ -21,6 +23,11 @@ const defaultWindowBounds: WindowBounds = { width: 1600, height: 900, x: undefin
 const defaultIsMaximized: boolean = false;
 
 /// <reference types="./electron-env" />
+
+const require = createRequire(import.meta.url);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -116,7 +123,7 @@ const createApplicationMenu = () => {
         {
           label: 'Learn More',
           click: async () => {
-            const { shell: electronShell } = require('electron'); // Renamed to avoid conflict with 'shell' variable
+            // Use the electronShell imported at the top of the file
             await electronShell.openExternal('https://github.com/frostyknees/anchor-ide'); // Placeholder URL
           }
         }
@@ -463,7 +470,9 @@ const createWindow = async () => {
   const isMaximized = store.get('isMaximized', defaultIsMaximized);
 
   const iconPath = path.join(__dirname, process.env.NODE_ENV === 'development' ? '../../src/assets/anchor_icon.png' : '../renderer/assets/anchor_icon.png');
-  
+  const preloadScriptPath = pathToFileURL(path.join(__dirname, 'preload.js')).href;
+  console.log('[Main Process] Attempting to load preload script (as URL) from:', preloadScriptPath);
+
   mainWindow = new BrowserWindow({
     icon: iconPath,
     width: storedWindowBounds.width,
