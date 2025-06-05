@@ -11,7 +11,7 @@ interface FileExplorerItemProps {
 }
 
 const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, level, refreshNonce }) => {
-  const [isOpen, setIsOpen] = useState(item.isDirectory && level === 0); 
+  const [isOpen, setIsOpen] = useState(item.type === 'directory' && level === 0); 
   const [children, setChildren] = useState<DirectoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const isMounted = useRef(true);
@@ -22,7 +22,7 @@ const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, l
   }, []);
 
   const fetchChildren = async (forceRefresh = false) => {
-    if (!item.isDirectory) return;
+    if (item.type !== 'directory') return;
     if (isOpen && (children.length === 0 || forceRefresh)) {
         setIsLoading(true);
         console.log(`FileExplorerItem (${item.name}): Fetching children (force: ${forceRefresh})`);
@@ -30,8 +30,8 @@ const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, l
         if (!isMounted.current) return;
         if (result && !('error' in result)) {
           setChildren(result.sort((a, b) => {
-            if (a.isDirectory === b.isDirectory) return a.name.localeCompare(b.name);
-            return a.isDirectory ? -1 : 1;
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === 'directory' ? -1 : 1;
           }));
         } else {
           console.error("Error reading directory in FileExplorerItem:", item.path, result?.error);
@@ -42,14 +42,14 @@ const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, l
   };
 
   useEffect(() => {
-    if (item.isDirectory && isOpen) {
+    if (item.type === 'directory' && isOpen) {
       fetchChildren(true); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshNonce]); 
 
   useEffect(() => {
-    if (item.isDirectory && isOpen && children.length === 0) { 
+    if (item.type === 'directory' && isOpen && children.length === 0) { 
       fetchChildren();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,22 +57,22 @@ const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, l
 
 
   const handleToggle = async () => {
-    if (item.isDirectory) {
-      setIsOpen(prevIsOpen => !prevIsOpen); 
+    if (item.type === 'directory') {
+      setIsOpen((prevIsOpen: boolean) => !prevIsOpen); 
     } else { 
       onOpenItem(item);
     }
   };
   
   const handleDoubleClick = () => {
-    if (item.isFile) onOpenItem(item);
-    else if (item.isDirectory) handleToggle(); 
+    if (item.type === 'file') onOpenItem(item);
+    else if (item.type === 'directory') handleToggle(); 
   };
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    window.electronAPI?.showFileExplorerContextMenu(item.path, item.isDirectory);
+    window.electronAPI?.showFileExplorerContextMenu(item.path, item.type === 'directory');
   };
 
   const indentStyle = { paddingLeft: `${level * 20}px` };
@@ -86,15 +86,15 @@ const FileExplorerItem: React.FC<FileExplorerItemProps> = ({ item, onOpenItem, l
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
       >
-        {item.isDirectory && (
+        {item.type === 'directory' && (
           <i className={`bi ${isOpen ? 'bi-chevron-down' : 'bi-chevron-right'} me-1 small`}></i> 
         )}
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-          {getFileIcon(item.name, item.isDirectory, isOpen)}
+          {getFileIcon(item.name, item.type === 'directory', isOpen)}
           <span>{item.name}</span>
         </span>
       </div>
-      {isOpen && item.isDirectory && (
+      {isOpen && item.type === 'directory' && (
         <div style={{ borderLeft: '1px dashed var(--anchor-border-color)', marginLeft: `${level * 10 + 12}px`, paddingLeft: '12px' }}> 
           {isLoading && <div style={{ paddingLeft: `10px` }} className="text-muted small">Loading...</div>}
           {children.map(child => (

@@ -38,11 +38,28 @@ const EditorArea: React.FC<EditorAreaProps> = ({
   // Effect to load initial open files and set active tab from persisted state
   useEffect(() => {
     const initializeEditorStateForSession = async () => {
+      console.log(
+        '[EditorArea] initializeEditorStateForSession: initialOpenFiles:', initialOpenFiles,
+        'isFolderCurrentlyOpen:', isFolderCurrentlyOpen,
+        'initialActiveFileId:', initialActiveFileId
+      );
+
       if (!isFolderCurrentlyOpen) {
-        setOpenFiles([]);
-        setActiveFileId(null);
-        return;
+        // If no folder is open, EditorArea should generally be empty.
+        // However, if initialOpenFiles (prop) has data, it means App.tsx might be in a transient state
+        // (files fetched, folder path not yet processed). In this case, EditorArea should wait.
+        if (initialOpenFiles && initialOpenFiles.length > 0) {
+          console.log('[EditorArea] Folder not currently open, but initialOpenFiles (prop) has data. Waiting for isFolderCurrentlyOpen to become true before processing.');
+          return; // Wait for isFolderCurrentlyOpen to become true
+        } else {
+          // No folder open AND no initial files from props; it's safe to clear.
+          console.log('[EditorArea] No folder open and no initial files from props, clearing internal state.');
+          setOpenFiles([]);
+          setActiveFileId(null);
+          return;
+        }
       }
+      // At this point, isFolderCurrentlyOpen is true. Proceed with loading files.
 
       // Folder is open, use current initial props to set state.
       // This assumes initialOpenFiles & initialActiveFileId are the correct persisted state
@@ -50,18 +67,37 @@ const EditorArea: React.FC<EditorAreaProps> = ({
       if (initialOpenFiles && initialOpenFiles.length > 0) {
         const loadedFiles: EditorFile[] = [];
         for (const filePath of initialOpenFiles) {
-          const result = await window.electronAPI?.readFile(filePath);
-          if (result && 'content' in result) {
-            loadedFiles.push({
-              id: filePath,
-              name: getBasename(filePath),
-              content: result.content,
-              isDirty: false,
-            });
+          const fileReadResult = await window.electronAPI?.readFile(filePath);
+
+          if (fileReadResult) {
+            // Check if it's an object with 'content' (successful read)
+            if (typeof fileReadResult === 'object' && fileReadResult !== null && 'content' in fileReadResult && typeof fileReadResult.content === 'string') {
+              loadedFiles.push({
+                id: filePath,
+                name: getBasename(filePath),
+                content: fileReadResult.content,
+                isDirty: false,
+              });
+            // Check if it's an object with 'error' (read failed)
+            } else if (typeof fileReadResult === 'object' && fileReadResult !== null && 'error' in fileReadResult) {
+              console.warn(`Could not load persisted file ${filePath}: ${(fileReadResult as {error: string}).error}`);
+            // Check if it's a direct string (alternative success case, handles current issue)
+            } else if (typeof fileReadResult === 'string') {
+                 console.warn(`File ${filePath} was read as a direct string. Assuming this is content.`);
+                 loadedFiles.push({
+                    id: filePath,
+                    name: getBasename(filePath),
+                    content: fileReadResult, // Use the string directly
+                    isDirty: false,
+                 });
+            } else {
+              console.warn(`Could not load persisted file: ${filePath}. Unexpected result:`, fileReadResult);
+            }
           } else {
-            console.warn(`Could not load persisted file: ${filePath}`);
+            console.warn(`Could not load persisted file: ${filePath}. No result from readFile.`);
           }
         }
+        console.log('[EditorArea] initializeEditorStateForSession: loadedFiles before setOpenFiles:', loadedFiles);
         setOpenFiles(loadedFiles);
         if (initialActiveFileId && loadedFiles.find(f => f.id === initialActiveFileId)) {
           setActiveFileId(initialActiveFileId);
@@ -81,12 +117,13 @@ const EditorArea: React.FC<EditorAreaProps> = ({
     // It reads initialOpenFiles/initialActiveFileId but doesn't list them as dependencies
     // to avoid re-triggering when they change due to this component's own updates.
     // This is a common pattern for props that are for initial setup of a session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFolderCurrentlyOpen]);
+  }, [isFolderCurrentlyOpen, initialOpenFiles, initialActiveFileId]);
 
   // Propagate open files and active file changes upwards for persistence
   useEffect(() => {
-    onOpenFilesChange(openFiles.map(f => f.id));
+    const filesToPropagate = openFiles.map(f => f.id);
+    console.log('[EditorArea] Propagating open files upwards:', filesToPropagate);
+    onOpenFilesChange(filesToPropagate);
   }, [openFiles, onOpenFilesChange]);
 
   useEffect(() => {
@@ -175,7 +212,7 @@ const EditorArea: React.FC<EditorAreaProps> = ({
 
   useEffect(() => {
     const loadFileContent = async (fileItem: DirectoryItem) => {
-      if (fileItem && fileItem.isFile) {
+      if (fileItem && fileItem.type === 'file') {
         const existingFile = openFiles.find(f => f.id === fileItem.path);
         if (existingFile) {
           if (activeFileId !== fileItem.path) {
@@ -185,11 +222,11 @@ const EditorArea: React.FC<EditorAreaProps> = ({
         }
 
         const result = await window.electronAPI?.readFile(fileItem.path);
-        if (result && 'content' in result) {
+        if (typeof result === 'string') {
           const newFile: EditorFile = {
             id: fileItem.path,
             name: fileItem.name,
-            content: result.content,
+            content: result,
             isDirty: false,
           };
           setOpenFiles(prev => {
@@ -197,8 +234,10 @@ const EditorArea: React.FC<EditorAreaProps> = ({
             return [...prev, newFile];
           });
           setActiveFileId(newFile.id); 
+        } else if (result === null) {
+          console.error(`Error reading file ${fileItem.path}: File content is null. Check main process logs.`);
         } else {
-          console.error("Error reading file for editor:", result?.error);
+          console.error(`Error reading file ${fileItem.path}: Unexpected result type:`, result);
         }
       }
     };

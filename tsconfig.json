@@ -5,19 +5,20 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
+    "module": "node16",
+    "moduleResolution": "node16",
+    "isolatedModules": false,
     "declaration": true,
-    "emitDeclarationOnly": true, // Allow .d.ts emit for project references
+    "emitDeclarationOnly": true,
+    "declarationDir": "./dist/types",
     "jsx": "react-jsx",
     "composite": true,
     "paths": {
       "@/*": ["./src/*"]
     },
+    "typeRoots": ["./node_modules/@types", "./node_modules"],
     "types": ["vite/client"]
   },
-  "include": ["src"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/types/index.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

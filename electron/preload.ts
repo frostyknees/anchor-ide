@@ -1,52 +1,6 @@
 // electron/preload.ts
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { AppSettings, DirectoryItem, FileSystemResult } from '@src/types'; // Assuming types are in src/types
-
-// Define the ElectronAPI interface that will be exposed to the renderer process
-export interface ElectronAPI {
-  // Theme Management
-  onUpdateTheme: (callback: (isDarkMode: boolean) => void) => () => void;
-  getInitialTheme: () => Promise<boolean>;
-  toggleDarkMode: () => Promise<boolean>;
-  setSystemTheme: () => Promise<void>;
-
-  // Application Menu
-  showAppMenu: (position?: { x: number; y: number }) => void;
-  
-  // Window Controls
-  sendWindowControl: (action: 'minimize' | 'maximize' | 'unmaximize' | 'close') => void;
-  onWindowMaximized: (callback: (isMaximized: boolean) => void) => (() => void);
-
-  // File System Operations
-  openFolderDialog: () => Promise<string | undefined>; 
-  readDir: (dirPath: string) => Promise<DirectoryItem[] | { error: string }>;
-  readFile: (filePath: string) => Promise<{ content: string } | { error: string }>;
-  saveFile: (filePath: string, content: string) => Promise<FileSystemResult>; 
-  createFile: (filePath: string) => Promise<FileSystemResult>; 
-  createFolder: (folderPath: string) => Promise<FileSystemResult>; 
-  renameItem: (oldPath: string, newName: string) => Promise<FileSystemResult>; 
-  deleteItem: (itemPath: string, isDirectory: boolean) => Promise<FileSystemResult>; 
-
-  // File Explorer Context Menu
-  showFileExplorerContextMenu: (itemPath: string, isDirectory: boolean) => void; 
-  onContextMenuCommand: (callback: (args: {command: string, path: string, isDirectory: boolean}) => void) => (() => void); 
-  
-  // Terminal Interaction
-  openPathInTerminal: (path: string) => void; 
-  ptyHostWrite: (data: string) => void;
-  ptyHostResize: (cols: number, rows: number) => void;
-  onPtyHostData: (callback: (data: string | Uint8Array) => void) => (() => void); 
-  ptyHostInit: () => void;
-  
-  // State Persistence
-  getAppSettings: () => Promise<Partial<AppSettings>>;
-  saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
-
-  // Generic IPC (less used if specific methods are exposed)
-  send: (channel: string, data?: any) => void;
-  invoke: (channel: string, ...args: any[]) => Promise<any>;
-  on: (channel: string, func: (...args: any[]) => void) => (() => void);
-}
+import type { AppSettings, DirectoryItem, FileSystemResult, ElectronAPI } from '@src/types';
 
 // Implementation of the ElectronAPI
 const electronAPI: ElectronAPI = {
@@ -97,26 +51,55 @@ const electronAPI: ElectronAPI = {
   
   // Terminal
   openPathInTerminal: (path: string) => ipcRenderer.send('terminal:openAt', path),
-  ptyHostWrite: (data: string) => ipcRenderer.send('pty-host:write', data),
-  ptyHostResize: (cols: number, rows: number) => ipcRenderer.send('pty-host:resize', { cols, rows }),
-  onPtyHostData: (callback: (data: string | Uint8Array) => void) => {
+  initTerminal: () => ipcRenderer.send('terminal:init'),
+  writeToTerminal: (data: string) => ipcRenderer.send('terminal-command', data),
+  resizeTerminal: (cols: number, rows: number) => ipcRenderer.send('terminal:resize', { cols, rows }),
+  onTerminalData: (callback: (data: string | Uint8Array) => void) => {
     const subscription = (_event: IpcRendererEvent, data: string | Uint8Array) => callback(data);
-    ipcRenderer.on('pty-host:data', subscription);
-    return () => ipcRenderer.removeListener('pty-host:data', subscription); 
+    ipcRenderer.on('terminal-data', subscription);
+    return () => ipcRenderer.removeListener('terminal-data', subscription); 
   },
-  ptyHostInit: () => ipcRenderer.send('pty-host:init'),
+  onTerminalExit: (callback: (event: { exitCode: number, signal?: number }) => void) => {
+    const subscription = (_event: IpcRendererEvent, eventData: { exitCode: number, signal?: number }) => callback(eventData);
+    ipcRenderer.on('terminal:exit', subscription);
+    return () => ipcRenderer.removeListener('terminal:exit', subscription);
+  },
 
   // State Persistence
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
   saveAppSettings: (settings) => ipcRenderer.invoke('save-app-settings', settings),
+  saveOpenedFolder: (folderPath: string | null) => ipcRenderer.send('workspace:save-opened-folder', folderPath),
+  saveOpenFiles: (openFilePaths: string[]): Promise<boolean> => {
+    console.log('[Preload] Invoking save-open-files with:', openFilePaths);
+    return ipcRenderer.invoke('save-open-files', openFilePaths);
+  },
+  saveActiveFile: (activeFilePath: string | null) => ipcRenderer.invoke('workspace:save-active-file', activeFilePath),
+  getOpenFiles: () => ipcRenderer.invoke('workspace:get-open-files'),
+  getActiveFile: () => ipcRenderer.invoke('workspace:get-active-file'),
+  onRestoreOpenedFolder: (callback) => {
+    const handler = (_event: IpcRendererEvent, folderPath: string) => callback(folderPath);
+    ipcRenderer.on('restore-opened-folder', handler);
+    return () => ipcRenderer.removeListener('restore-opened-folder', handler);
+  },
+  onRestoreOpenFiles: (callback) => {
+    const handler = (_event: IpcRendererEvent, filePaths: string[]) => callback(filePaths);
+    ipcRenderer.on('restore-open-files', handler);
+    return () => ipcRenderer.removeListener('restore-open-files', handler);
+  },
+  onRestoreActiveFile: (callback) => {
+    const handler = (_event: IpcRendererEvent, activeFilePath: string | null) => callback(activeFilePath);
+    ipcRenderer.on('restore-active-file', handler);
+    return () => ipcRenderer.removeListener('restore-active-file', handler);
+  },
 
   // Generic IPC (use with caution, prefer specific methods)
   send: (channel: string, data?: any) => {
     // Whitelist channels for security
     const validSendChannels = [
         'toMain', 'trigger-save', 'trigger-save-as', 'trigger-close-tab', 
-        'open-settings', 'show-file-explorer-context-menu', 'terminal:openAt', 
-        'window-control', 'pty-host:write', 'pty-host:resize', 'pty-host:init'
+        'show-file-explorer-context-menu', 'window-control', 
+        'terminal:openAt', 'terminal:init', 'terminal-command', 'terminal:resize',
+        'save-open-files', 'save-active-file', 'workspace:save-opened-folder'
     ]; 
     if (validSendChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
@@ -132,6 +115,8 @@ const electronAPI: ElectronAPI = {
         'fs:readDir', 'fs:readFile', 'fs:createFile', 'fs:createFolder',
         'fs:renameItem', 'fs:deleteItem', 'fs:saveFile',
         'get-app-settings', 'save-app-settings',
+        'workspace:get-open-files',
+        'workspace:get-active-file',
         'show-app-menu'
      ]; 
      if (validInvokeChannels.includes(channel)) {
@@ -143,10 +128,11 @@ const electronAPI: ElectronAPI = {
   on: (channel: string, func: (...args: any[]) => void) => {
     const validOnChannels = [
         'fromMain', 'file-opened', 'settings-changed', 'update-theme', 
-        'pty-host:data', 'pty-host:exit', 'trigger-open-folder', 
+        'terminal-data', 'terminal:exit', 'trigger-open-folder', 
         'trigger-save', 'trigger-save-as', 'trigger-close-tab', 
         'open-settings', 'context-menu-command', 'display-terminal-path',
-        'window-maximized' 
+        'window-maximized',
+        'restore-opened-folder', 'restore-open-files', 'restore-active-file'
     ]; 
     if (validOnChannels.includes(channel)) {
       const listener = (_event: IpcRendererEvent, ...args: any[]) => func(...args);

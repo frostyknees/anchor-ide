@@ -26,9 +26,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onOpenFile, rootPathToLoad,
     setCurrentRootPath(dirPath); 
     // Create a single root item representing the selected folder
     const rootFolderItem: DirectoryItem = {
+      id: dirPath,
       name: getBasename(dirPath), 
-      isDirectory: true,
-      isFile: false,
+      type: 'directory',
       path: dirPath,
       // children will be fetched by FileExplorerItem when expanded
     };

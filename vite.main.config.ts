@@ -17,15 +17,11 @@ export default defineConfig({
   //   },
   // },
   build: {
-    lib: {
-      entry: resolve(__dirname, 'electron/main.ts'), // Path to your main process entry file
-      name: 'ElectronMain',
-      formats: ['cjs'], // Electron main process requires CommonJS
-      fileName: () => 'main.js', // **CRITICAL: Ensures output is main.js**
-    },
+
     outDir: 'dist/electron', // **CRITICAL: Output directory must match package.json "main" path**
     emptyOutDir: true, // Cleans the output directory before build (be careful if preload is also output here in a separate step)
     rollupOptions: {
+      input: 'electron/main.ts', // Specify input for rollup, as suggested by electron-vite dev error
       // Externalize modules that Electron provides or are native
       external: [
         'electron',

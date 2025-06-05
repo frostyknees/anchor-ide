@@ -20,13 +20,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatInputRef, initialHistory, o
   const actualInputRef = useRef<HTMLInputElement>(null); 
   const chatBodyRef = useRef<HTMLDivElement>(null);
 
-  // Load initial history
-  useEffect(() => {
-    if (initialHistory) {
-      setChatHistory(initialHistory);
-    }
-  }, [initialHistory]);
-
   // Propagate history changes
   useEffect(() => {
     if (onHistoryChange) {
